@@ -1,255 +1,180 @@
 import SwiftUI
-import PhotosUI
+import Photos
 
 struct AddItemSheet: View {
     @ObservedObject var vm: TierListViewModel
     @Environment(\.dismiss) var dismiss
 
     @State private var labelText = ""
-    @State private var selectedPhotos: [PhotosPickerItem] = []
-    @State private var addedIndices: Set<Int> = []
-
-    // 通知用
+    @State private var showPhotoPicker = false
+    @State private var addedAssetIds: Set<String> = []
+    @State private var addedCount = 0
     @State private var showAddedFeedback = false
-    @State private var feedbackWorkItem: DispatchWorkItem?
+    @State private var showDismissAlert = false
+
+    private var hasUnadded: Bool {
+        !labelText.isEmpty
+    }
 
     var body: some View {
-        ZStack {
+        NavigationStack {
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
 
-            NavigationStack {
-                Form {
+                ScrollView {
+                    VStack(spacing: 24) {
 
-                    // ── テキストで追加 ──
-                    Section("テキストで追加") {
+                        // ── テキストで追加 ──
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("テキストで追加", systemImage: "textformat")
+                                .font(.headline)
+                                .foregroundColor(.primary)
 
-                        TextField("アイテム名", text: $labelText)
+                            VStack(spacing: 0) {
+                                TextField("アイテム名を入力", text: $labelText)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .background(Color(.systemBackground))
 
-                        Button("追加") {
-                            guard !labelText.isEmpty else { return }
+                                Divider()
+                                    .padding(.leading, 16)
 
-                            vm.addItem(label: labelText)
-                            showFeedback()
-
-                            labelText = ""
-                        }
-                        .disabled(labelText.isEmpty)
-                    }
-
-                    // ── 写真で追加 ──
-                    Section("写真で追加（複数選択可）") {
-
-                        PhotosPicker(
-                            "写真を選ぶ",
-                            selection: $selectedPhotos,
-                            maxSelectionCount: 50,
-                            matching: .images
-                        )
-                        .onChange(of: selectedPhotos) { _ in
-                            addedIndices = []
-                        }
-
-                        // プレビュー
-                        if !selectedPhotos.isEmpty {
-
-                            ScrollView(.horizontal, showsIndicators: false) {
-
-                                HStack(spacing: 8) {
-
-                                    ForEach(
-                                        Array(selectedPhotos.enumerated()),
-                                        id: \.offset
-                                    ) { index, photo in
-
-                                        PhotoThumbnailView(
-                                            photo: photo,
-                                            isAdded: addedIndices.contains(index)
-                                        )
+                                Button {
+                                    guard !labelText.isEmpty else { return }
+                                    vm.addItem(label: labelText)
+                                    labelText = ""
+                                    showFeedback()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "plus.circle.fill")
+                                        Text("追加する")
+                                            .bold()
                                     }
+                                    .foregroundColor(labelText.isEmpty ? .secondary : .blue)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .background(Color(.systemBackground))
                                 }
-                                .padding(.vertical, 8)
+                                .disabled(labelText.isEmpty)
                             }
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
+                        }
 
-                            // まとめて追加
-                            Button {
+                        // ── 写真で追加 ──
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("写真で追加", systemImage: "photo.on.rectangle")
+                                .font(.headline)
+                                .foregroundColor(.primary)
 
-                                Task {
-
-                                    for (index, item) in selectedPhotos.enumerated() {
-
-                                        guard !addedIndices.contains(index)
-                                        else { continue }
-
-                                        if let data = try? await item
-                                            .loadTransferable(type: Data.self)
-                                        {
-
-                                            await MainActor.run {
-
-                                                vm.addItem(
-                                                    label: "",
-                                                    imageData: data
-                                                )
-
-                                                addedIndices.insert(index)
-
-                                                showFeedback()
-                                            }
+                            VStack(spacing: 0) {
+                                Button {
+                                    showPhotoPicker = true
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "photo.stack")
+                                            .font(.title3)
+                                            .foregroundColor(.blue)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("写真を選ぶ")
+                                                .bold()
+                                                .foregroundColor(.blue)
+                                            Text("追加済みはグレーで表示されます")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
                                         }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
                                     }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .background(Color(.systemBackground))
                                 }
 
-                            } label: {
+                                if addedCount > 0 {
+                                    Divider()
+                                        .padding(.leading, 16)
 
-                                HStack {
-                                    Spacer()
-
-                                    Text(
-                                        addedIndices.count
-                                            == selectedPhotos.count
-                                            ? "すべて追加済み"
-                                            : "\(selectedPhotos.count - addedIndices.count)枚を追加"
-                                    )
-                                    .bold()
-
-                                    Spacer()
+                                    HStack {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                        Text("\(addedCount)枚追加済み")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .background(Color(.systemBackground))
                                 }
                             }
-                            .disabled(
-                                addedIndices.count
-                                    == selectedPhotos.count
-                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+                    .padding(.bottom, 40)
                 }
-                .navigationTitle("アイテム追加")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("閉じる") {
+
+                // ── 追加フィードバック ──
+                if showAddedFeedback {
+                    ZStack {
+                        Circle()
+                            .fill(Color.black.opacity(0.6))
+                            .frame(width: 90, height: 90)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 36, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 0.7).combined(with: .opacity),
+                            removal: .scale(scale: 1.2).combined(with: .opacity)
+                        )
+                    )
+                }
+            }
+            .navigationTitle("アイテム追加")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") {
+                        if hasUnadded {
+                            showDismissAlert = true
+                        } else {
                             dismiss()
                         }
                     }
                 }
             }
-
-            // ── 追加通知 ──
-            if showAddedFeedback {
-
-                ZStack {
-
-                    Circle()
-                        .fill(Color.black.opacity(0.72))
-                        .frame(width: 90, height: 90)
-
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 36, weight: .bold))
-                        .foregroundColor(.white)
+            .alert("未追加のアイテムがあります", isPresented: $showDismissAlert) {
+                Button("追加せず閉じる", role: .destructive) { dismiss() }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("入力中のテキストが追加されていません。このまま閉じますか？")
+            }
+            .sheet(isPresented: $showPhotoPicker) {
+                PhotoGridPicker(addedAssetIds: $addedAssetIds) { data in
+                    vm.addItem(label: "", imageData: data)
+                    addedCount += 1
+                    showFeedback()
                 }
-                .transition(
-                    .asymmetric(
-                        insertion:
-                            .scale(scale: 0.7)
-                            .combined(with: .opacity),
-
-                        removal:
-                            .scale(scale: 1.2)
-                            .combined(with: .opacity)
-                    )
-                )
-                .zIndex(100)
             }
         }
     }
-
-    // MARK: - Feedback
 
     private func showFeedback() {
-
-        // 前回予約キャンセル
-        feedbackWorkItem?.cancel()
-
-        withAnimation(
-            .spring(
-                response: 0.3,
-                dampingFraction: 0.65
-            )
-        ) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
             showAddedFeedback = true
         }
-
-        let workItem = DispatchWorkItem {
-
-            withAnimation(.easeOut(duration: 0.25)) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            withAnimation(.easeOut(duration: 0.3)) {
                 showAddedFeedback = false
-            }
-        }
-
-        feedbackWorkItem = workItem
-
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.8,
-            execute: workItem
-        )
-    }
-}
-
-// MARK: - Photo Thumbnail
-
-struct PhotoThumbnailView: View {
-
-    let photo: PhotosPickerItem
-    let isAdded: Bool
-
-    @State private var uiImage: UIImage? = nil
-
-    var body: some View {
-
-        ZStack(alignment: .topTrailing) {
-
-            Group {
-
-                if let image = uiImage {
-
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-
-                } else {
-
-                    Color(.systemGray5)
-                        .overlay(ProgressView())
-                }
-            }
-            .frame(width: 70, height: 70)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.black.opacity(isAdded ? 0.4 : 0))
-            )
-
-            if isAdded {
-
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-                    .background(
-                        Color.white.clipShape(Circle())
-                    )
-                    .offset(x: 4, y: -4)
-            }
-        }
-        .task {
-
-            if let data = try? await photo
-                .loadTransferable(type: Data.self),
-               let image = UIImage(data: data)
-            {
-
-                let thumbnail = await image.byPreparingThumbnail(
-                    ofSize: CGSize(width: 140, height: 140)
-                )
-
-                await MainActor.run {
-                    uiImage = thumbnail ?? image
-                }
             }
         }
     }
