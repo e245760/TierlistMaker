@@ -11,6 +11,8 @@ struct ItemPoolView: View {
     let rowFrames: [UUID: CGRect]
     let trayFrame: CGRect
 
+    @State private var dragOffset: CGFloat = 0
+
     private let rows = Array(repeating: GridItem(.fixed(65), spacing: 6), count: 4)
     private let itemSize: CGFloat = 65
     private let rowCount: CGFloat = 4
@@ -22,15 +24,43 @@ struct ItemPoolView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+
+            // ハンドル
             RoundedRectangle(cornerRadius: 3)
                 .fill(Color.secondary.opacity(0.4))
                 .frame(width: 40, height: 5)
                 .padding(.top, 10)
+                .padding(.bottom, 8)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            // 下方向のみ追従
+                            if value.translation.height > 0 {
+                                dragOffset = value.translation.height
+                            }
+                        }
+                        .onEnded { value in
+                            // 一定距離以上で閉じる
+                            if value.translation.height > 100 {
+                                withAnimation(.spring()) {
+                                    showPool = false
+                                }
+                            }
+
+                            // 元位置へ戻す
+                            withAnimation(.spring()) {
+                                dragOffset = 0
+                            }
+                        }
+                )
 
             HStack {
                 Text("未分類")
                     .font(.headline)
+
                 Spacer()
+
                 Button {
                     showAddItem = true
                 } label: {
@@ -45,14 +75,20 @@ struct ItemPoolView: View {
             Divider()
 
             if vm.pool.isEmpty {
+
                 Text("アイテムがありません")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(height: gridHeight)
+
             } else {
+
                 ScrollView(.horizontal, showsIndicators: false) {
+
                     LazyHGrid(rows: rows, spacing: spacing) {
+
                         ForEach(vm.pool) { item in
+
                             DraggableTierItem(
                                 item: item,
                                 vm: vm,
@@ -60,8 +96,8 @@ struct ItemPoolView: View {
                                 onTap: {
                                     withAnimation(.spring()) {
                                         selectedItem = item
+                                        showPool = false
                                     }
-                                    showPool = false
                                 },
                                 draggingItem: $draggingItem,
                                 dragLocation: $dragLocation,
@@ -75,14 +111,9 @@ struct ItemPoolView: View {
                 }
                 .frame(height: gridHeight)
             }
-
         }
-        // 上だけ角丸をcornerRadiusで実現
-        .background(Color(.systemBackground))
-        .cornerRadius(20, antialiased: true)
-        .shadow(color: .black.opacity(0.15), radius: 12, y: -4)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        // セーフエリアまで背景を伸ばす（clipの外側）
+        .offset(y: dragOffset)
+        .animation(.spring(), value: dragOffset)
         .background(
             Color(.systemBackground)
                 .ignoresSafeArea(edges: .bottom)
@@ -100,6 +131,7 @@ struct RoundedCornerShape: Shape {
             byRoundingCorners: corners,
             cornerRadii: CGSize(width: radius, height: radius)
         )
+
         return Path(path.cgPath)
     }
 }

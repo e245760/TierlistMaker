@@ -22,8 +22,10 @@ struct ContentView: View {
     @State private var showAddItem = false
     @State private var showPool = false
     @State private var selectedItem: TierItem? = nil
+    @State private var showItemEdit = false
     @State private var tierListTitle = "ティア表"
     @State private var isEditingTitle = false
+    @State private var showTableEdit = false
     @FocusState private var titleFocused: Bool
 
     @State private var draggingItem: TierItem? = nil
@@ -40,36 +42,51 @@ struct ContentView: View {
                 ZStack(alignment: .bottom) {
 
                     // ── メインコンテンツ ──
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            ForEach($vm.rows) { $row in
-                                TierRowView(
-                                    row: $row,
-                                    vm: vm,
-                                    selectedItem: $selectedItem,
-                                    draggingItem: $draggingItem,
-                                    dragLocation: $dragLocation,
-                                    hoveredRowId: $hoveredRowId,
-                                    rowFrames: rowFrames,
-                                    trayFrame: trayFrame
-                                )
-                                .background(
-                                    GeometryReader { rowGeo in
-                                        Color.clear.preference(
-                                            key: RowFramePreferenceKey.self,
-                                            value: [
-                                                row.id: rowGeo.frame(
-                                                    in: .global
-                                                )
-                                            ]
-                                        )
-                                    }
-                                )
+                    GeometryReader { scrollGeo in
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                ForEach($vm.rows) { $row in
+                                    TierRowView(
+                                        rowId: row.id,
+                                        row: $row,
+                                        vm: vm,
+                                        selectedItem: $selectedItem,
+                                        draggingItem: $draggingItem,
+                                        dragLocation: $dragLocation,
+                                        hoveredRowId: $hoveredRowId,
+                                        rowFrames: rowFrames,
+                                        trayFrame: trayFrame
+                                    )
+                                    .background(
+                                        GeometryReader { rowGeo in
+                                            Color.clear.preference(
+                                                key: RowFramePreferenceKey.self,
+                                                value: [row.id: rowGeo.frame(in: .global)]
+                                            )
+                                        }
+                                    )
+                                }
+                                // スクロール余白
+                                Color.clear.frame(height: 20)
                             }
                         }
-                    }
-                    .onPreferenceChange(RowFramePreferenceKey.self) { frames in
-                        rowFrames = frames
+                        .onPreferenceChange(RowFramePreferenceKey.self) { frames in
+                            rowFrames = frames
+                        }
+                        // フローティングボタン(100pt) + フェード開始位置を考慮した表示領域
+                        .frame(height: scrollGeo.size.height - 100)
+                        // 下端をグラデーションでぼかす
+                        .mask(
+                            VStack(spacing: 0) {
+                                Rectangle()
+                                LinearGradient(
+                                    colors: [.black, .clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .frame(height: 40)
+                            }
+                        )
                     }
                     .zIndex(0)
 
@@ -77,8 +94,11 @@ struct ContentView: View {
                     if showPool {
                         Color.black.opacity(0.3)
                             .ignoresSafeArea()
+                            .transition(.opacity)
                             .onTapGesture {
-                                withAnimation(.spring()) { showPool = false }
+                                withAnimation(.easeOut(duration: 0.22)) {
+                                    showPool = false
+                                }
                             }
                             .zIndex(2)
                     }
@@ -96,8 +116,13 @@ struct ContentView: View {
                             rowFrames: rowFrames,
                             trayFrame: trayFrame
                         )
-                        .transition(.move(edge: .bottom))
-                        .zIndex(3)
+                        .transition(
+                                    .asymmetric(
+                                        insertion: .move(edge: .bottom),
+                                        removal: .offset(y: 500)
+                                    )
+                                )
+                                .zIndex(3)
                     }
 
                     // ── 待機状態：アイテム表示 ──
@@ -108,7 +133,26 @@ struct ContentView: View {
                                 Text("配置先のティアをタップ")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                TierItemView(item: item)
+
+                                Button {
+                                    showItemEdit = true
+                                } label: {
+                                    ZStack(alignment: .topTrailing) {
+                                        // selectedItem から最新データを取得して表示
+                                        TierItemView(item: latestItem(for: item) ?? item)
+
+                                        Image(systemName: "pencil.circle.fill")
+                                            .foregroundColor(.blue)
+                                            .background(Color.white.clipShape(Circle()))
+                                            .font(.subheadline)
+                                            .offset(x: 4, y: -4)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+
+                                Text("タップして編集")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
                             Spacer()
                         }
@@ -117,43 +161,65 @@ struct ContentView: View {
                         .zIndex(4)
                     }
 
-                    // ── フローティングボタン ──
+                    // ── フローティングボタン（待機・ドラッグ中はトレイのみ） ──
                     HStack {
-                        // ティア追加ボタン（待機中・ドラッグ中・プール表示中は非表示）
-                        if !showPool && selectedItem == nil
-                            && draggingItem == nil
-                        {
-                            let isFull = vm.rows.count >= 8
-                            Button {
-                                if !isFull { vm.addRow() }
-                            } label: {
-                                Image(systemName: "plus")
-                                    .font(.title2.bold())
+                        if selectedItem == nil && draggingItem == nil {
+                            // 左：表全体編集ボタン（プール表示中は非表示）
+                            if !showPool {
+                                Button {
+                                    showTableEdit = true
+                                } label: {
+                                    Image(systemName: "gearshape.fill")
+                                        .font(.title2.bold())
+                                        .frame(width: 50, height: 50)
+                                        .background(Color.blue)
+                                        .foregroundColor(.white)
+                                        .clipShape(Circle())
+                                        .shadow(radius: 4)
+                                }
+                                .padding(.leading, 20)
+                                .transition(.opacity.combined(with: .scale))
+                            } else {
+                                Color.clear
                                     .frame(width: 50, height: 50)
-                                    .background(
-                                        isFull
-                                            ? Color(.systemGray3) : Color.blue
-                                    )
-                                    .foregroundColor(.white)
-                                    .clipShape(Circle())
-                                    .shadow(radius: 4)
+                                    .padding(.leading, 20)
                             }
-                            .disabled(isFull)
-                            .padding(.leading, 20)
-                            .transition(.opacity.combined(with: .scale))
+
+                            Spacer()
+
+                            // 中：行追加ボタン（プール表示中は非表示）
+                            if !showPool {
+                                let isFull = vm.rows.count >= 8
+                                Button {
+                                    if !isFull { vm.addRow() }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(.title2.bold())
+                                        .frame(width: 50, height: 50)
+                                        .background(isFull ? Color(.systemGray3) : Color.blue)
+                                        .foregroundColor(.white)
+                                        .clipShape(Circle())
+                                        .shadow(radius: 4)
+                                }
+                                .disabled(isFull)
+                                .transition(.opacity.combined(with: .scale))
+                            } else {
+                                Color.clear.frame(width: 50, height: 50)
+                            }
+
+                            Spacer()
                         } else {
-                            // スペース確保用
                             Color.clear
                                 .frame(width: 50, height: 50)
                                 .padding(.leading, 20)
+                            Spacer()
+                            Color.clear.frame(width: 50, height: 50)
+                            Spacer()
                         }
 
-                        Spacer()
-
-                        // トレイボタン（常に表示）
+                        // 右：トレイボタン（常に表示）
                         Button {
                             if selectedItem != nil {
-                                // 待機中にタップ → 未分類に戻す
                                 withAnimation(.spring()) {
                                     vm.returnToPool(selectedItem!)
                                     selectedItem = nil
@@ -163,23 +229,19 @@ struct ContentView: View {
                             }
                         } label: {
                             ZStack(alignment: .topTrailing) {
-                                Image(
-                                    systemName: showPool ? "tray.fill" : "tray"
-                                )
-                                .font(.title2.bold())
-                                .frame(width: 50, height: 50)
-                                .background(
-                                    selectedItem != nil || draggingItem != nil
-                                        ? Color.orange  // 待機中・ドラッグ中はオレンジ
-                                        : showPool ? Color.orange : Color.blue
-                                )
-                                .foregroundColor(.white)
-                                .clipShape(Circle())
-                                .shadow(radius: 4)
+                                Image(systemName: showPool ? "tray.fill" : "tray")
+                                    .font(.title2.bold())
+                                    .frame(width: 50, height: 50)
+                                    .background(
+                                        selectedItem != nil || draggingItem != nil
+                                            ? Color.orange
+                                            : showPool ? Color.orange : Color.blue
+                                    )
+                                    .foregroundColor(.white)
+                                    .clipShape(Circle())
+                                    .shadow(radius: 4)
 
-                                if !vm.pool.isEmpty && selectedItem == nil
-                                    && draggingItem == nil
-                                {
+                                if !vm.pool.isEmpty && selectedItem == nil && draggingItem == nil {
                                     Text("\(vm.pool.count)")
                                         .font(.caption2.bold())
                                         .foregroundColor(.white)
@@ -191,13 +253,11 @@ struct ContentView: View {
                             }
                         }
                         .padding(.trailing, 20)
-                        // トレイボタンのフレームを取得
                         .background(
                             GeometryReader { trayGeo in
                                 Color.clear.onAppear {
                                     trayFrame = trayGeo.frame(in: .global)
-                                }.onChange(of: trayGeo.frame(in: .global)) {
-                                    newFrame in
+                                }.onChange(of: trayGeo.frame(in: .global)) { newFrame in
                                     trayFrame = newFrame
                                 }
                             }
@@ -269,6 +329,25 @@ struct ContentView: View {
             .sheet(isPresented: $showAddItem) {
                 AddItemSheet(vm: vm)
             }
+            // sheet
+            .sheet(isPresented: $showItemEdit, onDismiss: {
+                // 編集後に selectedItem を最新データで更新
+                if let item = selectedItem {
+                    selectedItem = latestItem(for: item)
+                }
+            }) {
+                if let item = selectedItem {
+                    if let poolIdx = vm.poolIndex(for: item.id) {
+                        TierItemEditSheet(item: $vm.pool[poolIdx])
+                    } else if let rowIdx = vm.rowIndex(for: item.id),
+                              let itemIdx = vm.itemIndex(for: item.id, in: rowIdx) {
+                        TierItemEditSheet(item: $vm.rows[rowIdx].items[itemIdx])
+                    }
+                }
+            }
+            .sheet(isPresented: $showTableEdit) {
+                TableEditSheet(vm: vm)
+            }
         }
     }
 
@@ -278,6 +357,17 @@ struct ContentView: View {
         }
         isEditingTitle = false
         titleFocused = false
+    }
+    
+    // vm から最新のアイテムデータを取得するヘルパー
+    private func latestItem(for item: TierItem) -> TierItem? {
+        if let poolIdx = vm.poolIndex(for: item.id) {
+            return vm.pool[poolIdx]
+        } else if let rowIdx = vm.rowIndex(for: item.id),
+                  let itemIdx = vm.itemIndex(for: item.id, in: rowIdx) {
+            return vm.rows[rowIdx].items[itemIdx]
+        }
+        return nil
     }
 }
 

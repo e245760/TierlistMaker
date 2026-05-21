@@ -1,10 +1,3 @@
-//
-//  TierItemView.swift
-//  TierListMaker
-//
-//  Created by Tome Kanya   on 2026/05/18.
-//
-
 import SwiftUI
 
 struct TierItemView: View {
@@ -16,15 +9,22 @@ struct TierItemView: View {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
+                    .scaleEffect(
+                        x: item.isFlippedHorizontal ? -1 : 1,
+                        y: item.isFlippedVertical   ? -1 : 1
+                    )
             } else {
                 Text(item.label)
-                    .font(.caption.bold())
+                    .font(.system(size: item.textSize.fontSize, weight: .bold))
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(2)
                     .multilineTextAlignment(.center)
+                    .foregroundColor(Color(hex: item.textColorHex))
                     .padding(4)
             }
         }
-        .frame(width: 60, height: 60)
-        .background(Color(.systemGray4))
+        .frame(width: item.itemSize.width, height: item.itemSize.height)
+        .background(Color(hex: item.backgroundColorHex))
         .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }

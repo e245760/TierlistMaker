@@ -1,10 +1,3 @@
-//
-//  DraggableTierItem.swift
-//  TierListMaker
-//
-//  Created by Tome Kanya   on 2026/05/20.
-//
-
 import SwiftUI
 
 struct DraggableTierItem: View {
@@ -16,7 +9,7 @@ struct DraggableTierItem: View {
     @Binding var dragLocation: CGPoint
     @Binding var hoveredRowId: UUID?
     @Binding var selectedItem: TierItem?
-    var trayFrame: CGRect  // トレイボタンのフレーム
+    var trayFrame: CGRect
 
     @State private var pressStartTime: Date? = nil
     @State private var isDragging = false
@@ -47,8 +40,6 @@ struct DraggableTierItem: View {
 
                         if isDragging {
                             dragLocation = value.location
-
-                            // トレイの上にホバー中かチェック
                             if trayFrame.contains(value.location) {
                                 hoveredRowId = nil
                             } else {
@@ -62,16 +53,11 @@ struct DraggableTierItem: View {
                         pressStartTime = nil
 
                         if isDragging {
-                            // ── ドラッグ終了 ──
                             if trayFrame.contains(value.location) {
-                                // トレイにドロップ → 未分類に戻す
-                                withAnimation(.spring()) {
-                                    vm.returnToPool(item)
-                                }
+                                withAnimation(.spring()) { vm.returnToPool(item) }
                             } else if let targetId = rowFrames.first(where: {
                                 $0.value.contains(value.location)
                             })?.key {
-                                // ティア行にドロップ → 移動
                                 withAnimation(.spring()) { vm.moveItem(item, toRowId: targetId) }
                             }
                             isDragging = false
@@ -80,7 +66,7 @@ struct DraggableTierItem: View {
                                 hoveredRowId = nil
                             }
                         } else {
-                            // ── タップ終了 ──
+                            // シングルタップのみ
                             onTap()
                         }
                     }
