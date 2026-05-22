@@ -11,6 +11,7 @@ class TierListViewModel: ObservableObject {
     ]
     @Published var pool: [TierItem] = []
     @Published var itemAddedCount: Int = 0
+    @Published var addedAssetIds: Set<String> = []
 
     // デフォルト値
     @Published var defaultLabelSize: LabelSize = .narrow
@@ -29,8 +30,7 @@ class TierListViewModel: ObservableObject {
     func addRow() {
         let newRow = TierRow(
             tierName: "New",
-            color: "#AAAAAA",
-            labelSize: defaultLabelSize  // デフォルトサイズを適用
+            color: "#AAAAAA"
         )
         rows.append(newRow)
     }
@@ -39,22 +39,31 @@ class TierListViewModel: ObservableObject {
     func applyLabelSizeToAll(_ size: LabelSize) {
         defaultLabelSize = size
         for i in rows.indices {
-            rows[i].labelSize = size
+            rows[i].labelSizeOverride = nil
         }
     }
 
-    // アイテムサイズを全アイテムに一括適用
     func applyItemSizeToAll(_ size: ItemSize) {
         defaultItemSize = size
-        // プール内のアイテム
+        // プール
         for i in pool.indices {
             pool[i].itemSize = size
         }
-        // 各行のアイテム
+        // row override解除
         for i in rows.indices {
+            rows[i].rowItemSizeOverride = nil
             for j in rows[i].items.indices {
                 rows[i].items[j].itemSize = size
             }
+        }
+    }
+    
+    // 特定行のアイテムサイズを一括変更
+    func applyItemSizeToRow(_ size: ItemSize, rowId: UUID) {
+        guard let idx = rows.firstIndex(where: { $0.id == rowId }) else { return }
+        rows[idx].rowItemSizeOverride = size
+        for j in rows[idx].items.indices {
+            rows[idx].items[j].itemSize = size
         }
     }
 

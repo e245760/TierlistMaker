@@ -7,8 +7,6 @@ struct AddItemSheet: View {
 
     @State private var labelText = ""
     @State private var showPhotoPicker = false
-    @State private var addedAssetIds: Set<String> = []
-    @State private var addedCount = 0
     @State private var showAddedFeedback = false
     @State private var showDismissAlert = false
 
@@ -95,14 +93,15 @@ struct AddItemSheet: View {
                                     .background(Color(.systemBackground))
                                 }
 
-                                if addedCount > 0 {
+                                // 追加済み枚数表示部分
+                                if vm.addedAssetIds.count > 0 {
                                     Divider()
                                         .padding(.leading, 16)
 
                                     HStack {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundColor(.green)
-                                        Text("\(addedCount)枚追加済み")
+                                        Text("\(vm.addedAssetIds.count)枚追加済み")
                                             .font(.subheadline)
                                             .foregroundColor(.secondary)
                                         Spacer()
@@ -159,9 +158,8 @@ struct AddItemSheet: View {
                 Text("入力中のテキストが追加されていません。このまま閉じますか？")
             }
             .sheet(isPresented: $showPhotoPicker) {
-                PhotoGridPicker(addedAssetIds: $addedAssetIds) { data in
+                PhotoGridPicker(addedAssetIds: $vm.addedAssetIds) { data in
                     vm.addItem(label: "", imageData: data)
-                    addedCount += 1
                     showFeedback()
                 }
             }

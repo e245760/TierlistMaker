@@ -138,16 +138,16 @@ struct TextItemEditSheet: View {
                         .padding(.vertical, 4)
                     }
 
-                    // テキストカラー
-                    Section("テキストカラー") {
-                        colorGrid(colors: presetColors, selected: $editedTextColor)
-                        customColorPicker(label: "カスタムカラー", selected: $editedTextColor)
-                    }
-
                     // 背景色
                     Section("背景色") {
                         colorGrid(colors: presetBgColors, selected: $editedBgColor)
                         customColorPicker(label: "カスタムカラー", selected: $editedBgColor)
+                    }
+                    
+                    // テキストカラー
+                    Section("テキストカラー") {
+                        colorGrid(colors: presetColors, selected: $editedTextColor)
+                        customColorPicker(label: "カスタムカラー", selected: $editedTextColor)
                     }
                 }
             }
