@@ -4,6 +4,10 @@ struct TableEditSheet: View {
     @ObservedObject var vm: TierListViewModel
     @Environment(\.dismiss) var dismiss
 
+    // テーマ関連
+    @AppStorage("appTheme") private var appTheme: AppTheme = .light
+    @Environment(\.setAppTheme) private var setAppTheme
+
     @State private var editedLabelSize: LabelSize
     @State private var editedItemSize: ItemSize
 
@@ -27,7 +31,6 @@ struct TableEditSheet: View {
                             .foregroundColor(.secondary)
 
                         HStack(spacing: 0) {
-                            // ラベルプレビュー
                             Text("S")
                                 .font(.title2.bold())
                                 .frame(width: editedLabelSize.width)
@@ -35,7 +38,6 @@ struct TableEditSheet: View {
                                 .background(Color(hex: "#FF7F7F"))
                                 .foregroundColor(.black)
 
-                            // アイテムプレビュー
                             HStack(spacing: 4) {
                                 ForEach(0..<2, id: \.self) { _ in
                                     let previewItem = TierItem(
@@ -60,7 +62,47 @@ struct TableEditSheet: View {
                 .frame(height: 150)
 
                 Form {
-                    // ラベルサイズ
+
+                    // ── テーマ ──
+                    Section("テーマ") {
+                        HStack(spacing: 12) {
+                            ForEach(AppTheme.allCases, id: \.self) { theme in
+                                let isSelected = appTheme == theme
+                                Button {
+                                    withAnimation(.spring()) {
+                                        setAppTheme(theme)
+                                    }
+                                } label: {
+                                    VStack(spacing: 6) {
+                                        Image(systemName: theme.icon)
+                                            .font(.title2)
+                                            .foregroundColor(
+                                                isSelected ? .white : .primary
+                                            )
+                                        Text(theme.label)
+                                            .font(.caption.bold())
+                                            .foregroundColor(
+                                                isSelected ? .white : .primary
+                                            )
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(
+                                                isSelected
+                                                ? Color.blue
+                                                : Color(.systemGray5)
+                                            )
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    // ── ラベルサイズ ──
                     Section("ラベルサイズ（全行に適用）") {
                         HStack(spacing: 12) {
                             ForEach(LabelSize.allCases, id: \.self) { size in
@@ -89,7 +131,7 @@ struct TableEditSheet: View {
                         .padding(.vertical, 4)
                     }
 
-                    // アイテムサイズ
+                    // ── アイテムサイズ ──
                     Section("アイテムサイズ（全アイテムに適用）") {
                         HStack(spacing: 12) {
                             ForEach(ItemSize.allCases, id: \.self) { size in
