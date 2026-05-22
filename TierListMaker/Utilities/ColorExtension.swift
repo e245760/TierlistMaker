@@ -1,10 +1,3 @@
-//
-//  ColorExtension.swift
-//  TierListMaker
-//
-//  Created by Tome Kanya   on 2026/05/18.
-//
-
 import SwiftUI
 
 extension Color {
