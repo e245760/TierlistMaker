@@ -15,6 +15,7 @@ class TierListViewModel: ObservableObject {
 
     // デフォルト値
     @Published var defaultLabelSize: LabelSize = .narrow
+    @Published var defaultLabelTextSize: LabelTextSize = .medium
     @Published var defaultItemSize: ItemSize = .square
 
     func addItem(label: String, imageData: Data? = nil) {
@@ -42,7 +43,17 @@ class TierListViewModel: ObservableObject {
             rows[i].labelSizeOverride = nil
         }
     }
+    
+    // テキストサイズを全てに適応
+    func applyLabelTextSizeToAll(_ size: LabelTextSize) {
+        defaultLabelTextSize = size
 
+        for i in rows.indices {
+            rows[i].labelTextSizeOverride = nil
+        }
+    }
+    
+    // アイテムサイズを全てに適応
     func applyItemSizeToAll(_ size: ItemSize) {
         defaultItemSize = size
         // プール

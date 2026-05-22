@@ -4,13 +4,27 @@ import Photos
 struct PhotoGridPicker: View {
     @Binding var addedAssetIds: Set<String>
     let onAdd: (Data) -> Void
-    @Environment(\.dismiss) var dismiss
+
+    @Environment(\.dismiss) private var dismiss
 
     @State private var assets: [PHAsset] = []
     @State private var authStatus: PHAuthorizationStatus = .notDetermined
     @State private var selectedIds: Set<String> = []
 
-    private let columns = [GridItem(.adaptive(minimum: 100), spacing: 2)]
+    private let imageManager = PHCachingImageManager()
+
+    // MARK: - UIサイズ（pt基準）
+    private var itemSize: CGFloat {
+        UIScreen.main.bounds.width / 3
+    }
+
+    // MARK: - Grid（固定）
+    private var columns: [GridItem] {
+        Array(
+            repeating: GridItem(.fixed(itemSize), spacing: 2),
+            count: 3
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -18,12 +32,15 @@ struct PhotoGridPicker: View {
                 switch authStatus {
                 case .authorized, .limited:
                     photoGrid
+
                 case .denied, .restricted:
                     deniedView
+
                 case .notDetermined:
-                    Color.clear
+                    ProgressView()
+
                 @unknown default:
-                    Color.clear
+                    ProgressView()
                 }
             }
             .navigationTitle("写真を選ぶ")
@@ -32,6 +49,7 @@ struct PhotoGridPicker: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }
                 }
+
                 ToolbarItem(placement: .confirmationAction) {
                     Button("追加（\(selectedIds.count)枚）") {
                         addSelected()
@@ -45,59 +63,46 @@ struct PhotoGridPicker: View {
         .onAppear {
             requestAuth()
         }
+        .onDisappear {
+            imageManager.stopCachingImagesForAllAssets()
+        }
     }
 
-    // ── フォトグリッド ──
+    // MARK: - Grid
+
     private var photoGrid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 2) {
                 ForEach(assets, id: \.localIdentifier) { asset in
                     PhotoGridCell(
                         asset: asset,
+                        manager: imageManager,
+                        itemSize: itemSize,
                         isAdded: addedAssetIds.contains(asset.localIdentifier),
                         isSelected: selectedIds.contains(asset.localIdentifier)
                     )
                     .onTapGesture {
-                        // 追加済みはタップ不可
                         guard !addedAssetIds.contains(asset.localIdentifier) else { return }
-                        withAnimation(.spring()) {
-                            if selectedIds.contains(asset.localIdentifier) {
-                                selectedIds.remove(asset.localIdentifier)
-                            } else {
-                                selectedIds.insert(asset.localIdentifier)
-                            }
-                        }
+                        toggleSelection(asset.localIdentifier)
                     }
                 }
             }
         }
     }
 
-    // ── 権限拒否 ──
-    private var deniedView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "photo.slash")
-                .font(.system(size: 48))
-                .foregroundColor(.secondary)
-            Text("写真へのアクセスが許可されていません")
-                .font(.headline)
-            Text("設定アプリから写真へのアクセスを許可してください")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-            Button("設定を開く") {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
-            }
-            .buttonStyle(.borderedProminent)
+    private func toggleSelection(_ id: String) {
+        if selectedIds.contains(id) {
+            selectedIds.remove(id)
+        } else {
+            selectedIds.insert(id)
         }
-        .padding()
     }
 
-    // ── 権限リクエスト ──
+    // MARK: - Auth
+
     private func requestAuth() {
         authStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+
         if authStatus == .notDetermined {
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
                 DispatchQueue.main.async {
@@ -112,118 +117,157 @@ struct PhotoGridPicker: View {
         }
     }
 
-    // ── 画像を読み込む ──
+    // MARK: - Load
+
     private func loadAssets() {
-        let fetchOptions = PHFetchOptions()
-        fetchOptions.sortDescriptors = [
+        let options = PHFetchOptions()
+        options.sortDescriptors = [
             NSSortDescriptor(key: "creationDate", ascending: false)
         ]
-        let result = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+
+        let result = PHAsset.fetchAssets(with: .image, options: options)
+
         var loaded: [PHAsset] = []
         result.enumerateObjects { asset, _, _ in
             loaded.append(asset)
         }
+
         DispatchQueue.main.async {
-            assets = loaded
+            self.assets = loaded
+
+            // 初期キャッシュ（軽量）
+            let pixel = itemSize * UIScreen.main.scale
+
+            imageManager.startCachingImages(
+                for: Array(loaded.prefix(150)),
+                targetSize: CGSize(width: pixel, height: pixel),
+                contentMode: .aspectFill,
+                options: nil
+            )
         }
     }
 
-    // ── 選択した画像を追加 ──
+    // MARK: - Add
+
     private func addSelected() {
-        let manager = PHImageManager.default()
         let options = PHImageRequestOptions()
         options.isSynchronous = false
         options.deliveryMode = .highQualityFormat
+        options.resizeMode = .fast
+        options.isNetworkAccessAllowed = true
+
+        let pixel = itemSize * UIScreen.main.scale
+        let targetSize = CGSize(width: pixel, height: pixel)
 
         for id in selectedIds {
             guard let asset = assets.first(where: { $0.localIdentifier == id }) else { continue }
-            manager.requestImageDataAndOrientation(for: asset, options: options) { data, _, _, _ in
-                if let data = data {
-                    DispatchQueue.main.async {
-                        onAdd(data)
-                        addedAssetIds.insert(id)
-                    }
+
+            imageManager.requestImage(
+                for: asset,
+                targetSize: targetSize,
+                contentMode: .aspectFill,
+                options: options
+            ) { image, _ in
+                guard let image,
+                      let data = image.jpegData(compressionQuality: 0.85)
+                else { return }
+
+                DispatchQueue.main.async {
+                    onAdd(data)
+                    addedAssetIds.insert(id)
                 }
             }
         }
+    }
+
+    // MARK: - Denied
+
+    private var deniedView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "photo.slash")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+
+            Text("写真へのアクセスが許可されていません")
+                .font(.headline)
+
+            Button("設定を開く") {
+                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                UIApplication.shared.open(url)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding()
     }
 }
 
-// ── グリッドセル ──
 struct PhotoGridCell: View {
     let asset: PHAsset
+    let manager: PHCachingImageManager
+    let itemSize: CGFloat
+
     let isAdded: Bool
     let isSelected: Bool
 
-    @State private var image: UIImage? = nil
+    @State private var image: UIImage?
+    @State private var requestId: PHImageRequestID?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
+
             Group {
-                if let image = image {
+                if let image {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
+                        .frame(width: itemSize, height: itemSize)
+                        .clipped()
                 } else {
                     Color(.systemGray5)
+                        .frame(width: itemSize, height: itemSize)
                         .overlay(ProgressView())
                 }
             }
-            .frame(width: cellSize, height: cellSize)
-            .clipped()
-            // 追加済みはグレーアウト
-            .overlay(
-                Color.black.opacity(isAdded ? 0.5 : 0)
-            )
-            // 選択中は青みがかる
-            .overlay(
-                Color.blue.opacity(isSelected ? 0.3 : 0)
-            )
-            .border(isSelected ? Color.blue : Color.clear, width: 3)
 
-            if isAdded {
-                // 追加済みバッジ
+            .overlay(Color.black.opacity(isAdded ? 0.4 : 0))
+            .overlay(Color.blue.opacity(isSelected ? 0.3 : 0))
+            .border(isSelected ? Color.blue : .clear, width: 2)
+
+            if isAdded || isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.title3)
-                    .foregroundColor(.green)
-                    .background(Color.white.clipShape(Circle()))
-                    .padding(4)
-            } else if isSelected {
-                // 選択中バッジ
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3)
-                    .foregroundColor(.blue)
-                    .background(Color.white.clipShape(Circle()))
-                    .padding(4)
+                    .foregroundColor(isAdded ? .green : .blue)
+                    .padding(6)
             }
         }
-        .frame(width: cellSize, height: cellSize)
         .onAppear { loadImage() }
-    }
-
-    private var cellSize: CGFloat {
-        (UIScreen.main.bounds.width - 6) / 3
+        .onDisappear { cancelRequest() }
     }
 
     private func loadImage() {
-        let manager = PHImageManager.default()
-        let options = PHImageRequestOptions()
-        options.isSynchronous = false
-        options.deliveryMode = .opportunistic
-        options.resizeMode = .exact
+        guard image == nil else { return }
 
-        let size = CGSize(width: cellSize * 2, height: cellSize * 2)
-        manager.requestImage(
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .opportunistic
+        options.resizeMode = .fast
+        options.isNetworkAccessAllowed = true
+
+        let pixel = itemSize * UIScreen.main.scale
+
+        requestId = manager.requestImage(
             for: asset,
-            targetSize: size,
+            targetSize: CGSize(width: pixel, height: pixel),
             contentMode: .aspectFill,
             options: options
         ) { image, _ in
-            if let image = image {
-                DispatchQueue.main.async {
-                    self.image = image
-                }
+            guard let image else { return }
+            DispatchQueue.main.async {
+                self.image = image
             }
         }
+    }
+
+    private func cancelRequest() {
+        guard let requestId else { return }
+        manager.cancelImageRequest(requestId)
     }
 }

@@ -7,10 +7,9 @@ struct TierRowEditSheet: View {
 
     @State private var editedName: String
     @State private var editedColor: Color
-
+    @State private var editedTextColor: Color
     @State private var editedLabelSize: LabelSize?
     @State private var editedTextSize: LabelTextSize?
-    @State private var editedTextColor: Color
     @State private var editedRowItemSize: ItemSize?
 
     let vm: TierListViewModel
@@ -27,64 +26,47 @@ struct TierRowEditSheet: View {
     ]
 
     init(row: Binding<TierRow>, vm: TierListViewModel) {
-
         self._row = row
         self.vm = vm
-
         self._editedName = State(
             initialValue: row.wrappedValue.tierName
         )
-
         self._editedColor = State(
             initialValue: Color(hex: row.wrappedValue.color)
         )
-
         self._editedTextColor = State(
             initialValue: Color(hex: row.wrappedValue.textColorHex)
         )
-
         self._editedLabelSize = State(
             initialValue: row.wrappedValue.labelSizeOverride
         )
-
         self._editedTextSize = State(
             initialValue: row.wrappedValue.labelTextSizeOverride
         )
-
         self._editedRowItemSize = State(
             initialValue: row.wrappedValue.rowItemSizeOverride
         )
     }
 
     var body: some View {
-
         let effectiveLabelSize =
             editedLabelSize ?? vm.defaultLabelSize
-
         let effectiveTextSize =
-            editedTextSize ?? .medium
-
+            editedTextSize ?? vm.defaultLabelTextSize
         let effectiveItemSize =
             editedRowItemSize ?? vm.defaultItemSize
 
         NavigationStack {
-
             VStack(spacing: 0) {
-
                 // ── プレビュー ──
                 ZStack {
-
                     Color(.systemGray6)
                         .ignoresSafeArea(edges: .top)
-
                     VStack(spacing: 8) {
-
                         Text("プレビュー")
                             .font(.caption)
                             .foregroundColor(.secondary)
-
                         HStack(spacing: 0) {
-
                             // ラベル
                             Text(editedName.isEmpty ? "?" : editedName)
                                 .font(
@@ -99,17 +81,13 @@ struct TierRowEditSheet: View {
                                 .frame(height: 65)
                                 .background(editedColor)
                                 .foregroundColor(editedTextColor)
-
                             // アイテム
                             HStack(spacing: 4) {
-
                                 ForEach(0..<2, id: \.self) { _ in
-
                                     let previewItem = TierItem(
                                         label: "A",
                                         itemSize: effectiveItemSize
                                     )
-
                                     TierItemView(item: previewItem)
                                 }
                             }
@@ -132,12 +110,9 @@ struct TierRowEditSheet: View {
                     .padding(.vertical, 16)
                 }
                 .frame(height: 150)
-
                 Form {
-
                     // ── ラベルテキスト ──
                     Section("ラベルテキスト（最大\(TierRow.maxLabelLength)文字）") {
-
                         TextField(
                             "S, A, B ...",
                             text: $editedName
@@ -145,78 +120,34 @@ struct TierRowEditSheet: View {
                         .autocorrectionDisabled(true)
                         .textInputAutocapitalization(.never)
                         .onChange(of: editedName) { newValue in
-
                             if newValue.count > TierRow.maxLabelLength {
-
                                 editedName = String(
                                     newValue.prefix(TierRow.maxLabelLength)
                                 )
                             }
                         }
                     }
-
-                    // ── テキストサイズ ──
+                    
+                    // テキストサイズ
                     Section("テキストサイズ") {
-
-                        let isUsingDefault =
-                            editedTextSize == nil
-
                         HStack(spacing: 8) {
-
-                            // デフォルト
-                            Button {
-
-                                withAnimation(.spring()) {
-                                    editedTextSize = nil
-                                }
-
-                            } label: {
-
-                                VStack(spacing: 4) {
-
-                                    Image(systemName: "arrow.triangle.branch")
-                                        .font(.title3)
-
-                                    Text("デフォルト")
-                                        .font(.caption.bold())
-
-                                    Text("中")
-                                        .font(.system(size: 10))
-                                }
-                                .foregroundColor(
-                                    isUsingDefault
-                                    ? .white
-                                    : .primary
-                                )
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(
-                                            isUsingDefault
-                                            ? Color.blue
-                                            : Color.blue.opacity(0.15)
-                                        )
-                                )
-                            }
-                            .buttonStyle(.plain)
-
-                            // 個別
+                            // ボタン
                             ForEach(LabelTextSize.allCases, id: \.self) { size in
-
+                                let effectiveSize = editedTextSize ?? vm.defaultLabelTextSize
                                 let isSelected =
-                                    editedTextSize == size
-
+                                    editedTextSize == nil
+                                    ? size == effectiveSize
+                                    : editedTextSize == size
                                 Button {
-
                                     withAnimation(.spring()) {
-                                        editedTextSize = size
+                                        if size == vm.defaultLabelTextSize {
+                                            editedTextSize = nil
+                                        } else {
+                                            editedTextSize = size
+                                        }
                                     }
-
                                 } label: {
-
                                     VStack(spacing: 4) {
-
                                         Text("A")
                                             .font(
                                                 .system(
@@ -224,7 +155,6 @@ struct TierRowEditSheet: View {
                                                     weight: .bold
                                                 )
                                             )
-
                                         Text(size.label)
                                             .font(.system(size: 9).bold())
                                     }
@@ -250,71 +180,30 @@ struct TierRowEditSheet: View {
                         .padding(.vertical, 4)
                     }
 
-                    // ── ラベルサイズ ──
+                    // ラベルサイズ
                     Section("ラベルサイズ") {
-
-                        let isUsingDefault =
-                            editedLabelSize == nil
-
                         HStack(spacing: 12) {
-
-                            // デフォルト
-                            Button {
-
-                                withAnimation(.spring()) {
-                                    editedLabelSize = nil
-                                }
-
-                            } label: {
-
-                                VStack(spacing: 6) {
-
-                                    Image(systemName: "arrow.triangle.branch")
-                                        .font(.title2)
-
-                                    Text("デフォルト")
-                                        .font(.caption.bold())
-
-                                    Text(vm.defaultLabelSize.label)
-                                        .font(.system(size: 10))
-                                }
-                                .foregroundColor(
-                                    isUsingDefault
-                                    ? .white
-                                    : .primary
-                                )
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(
-                                            isUsingDefault
-                                            ? Color.blue
-                                            : Color.blue.opacity(0.15)
-                                        )
-                                )
-                            }
-                            .buttonStyle(.plain)
-
-                            // 個別
+                            // ボタン
                             ForEach(LabelSize.allCases, id: \.self) { size in
-
+                                let effectiveSize =
+                                    editedLabelSize ?? vm.defaultLabelSize
                                 let isSelected =
-                                    editedLabelSize == size
-
+                                    editedLabelSize == nil
+                                    ? size == effectiveSize
+                                    : editedLabelSize == size
                                 Button {
-
                                     withAnimation(.spring()) {
-                                        editedLabelSize = size
+                                        // デフォルト値なら nil に戻す
+                                        if size == vm.defaultLabelSize {
+                                            editedLabelSize = nil
+                                        } else {
+                                            editedLabelSize = size
+                                        }
                                     }
-
                                 } label: {
-
                                     VStack(spacing: 6) {
-
                                         Image(systemName: size.icon)
                                             .font(.title2)
-
                                         Text(size.label)
                                             .font(.caption.bold())
                                     }
@@ -342,69 +231,27 @@ struct TierRowEditSheet: View {
 
                     // ── アイテムサイズ ──
                     Section("この行のアイテムサイズ") {
-
-                        let isUsingDefault =
-                            editedRowItemSize == nil
-
                         HStack(spacing: 12) {
-
-                            // デフォルト
-                            Button {
-
-                                withAnimation(.spring()) {
-                                    editedRowItemSize = nil
-                                }
-
-                            } label: {
-
-                                VStack(spacing: 6) {
-
-                                    Image(systemName: "arrow.triangle.branch")
-                                        .font(.title2)
-
-                                    Text("デフォルト")
-                                        .font(.caption.bold())
-
-                                    Text(vm.defaultItemSize.label)
-                                        .font(.system(size: 10))
-                                }
-                                .foregroundColor(
-                                    isUsingDefault
-                                    ? .white
-                                    : .primary
-                                )
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(
-                                            isUsingDefault
-                                            ? Color.blue
-                                            : Color.blue.opacity(0.15)
-                                        )
-                                )
-                            }
-                            .buttonStyle(.plain)
-
-                            // 個別
+                            // ボタン
                             ForEach(ItemSize.allCases, id: \.self) { size in
-
+                                let effectiveSize =
+                                    editedRowItemSize ?? vm.defaultItemSize
                                 let isSelected =
-                                    editedRowItemSize == size
-
+                                    editedRowItemSize == nil
+                                    ? size == effectiveSize
+                                    : editedRowItemSize == size
                                 Button {
-
                                     withAnimation(.spring()) {
-                                        editedRowItemSize = size
+                                        if size == vm.defaultItemSize {
+                                            editedRowItemSize = nil
+                                        } else {
+                                            editedRowItemSize = size
+                                        }
                                     }
-
                                 } label: {
-
                                     VStack(spacing: 6) {
-
                                         Image(systemName: size.icon)
                                             .font(.title2)
-
                                         Text(size.label)
                                             .font(.caption.bold())
                                     }
@@ -432,9 +279,7 @@ struct TierRowEditSheet: View {
 
                     // ── ラベルカラー ──
                     Section("ラベルの色") {
-
                         VStack(spacing: 16) {
-
                             LazyVGrid(
                                 columns: Array(
                                     repeating: GridItem(.flexible()),
@@ -442,14 +287,10 @@ struct TierRowEditSheet: View {
                                 ),
                                 spacing: 12
                             ) {
-
                                 ForEach(0..<presetColors.count, id: \.self) { i in
-
                                     let color = presetColors[i].1
-
                                     let isSelected =
                                         editedColor.toHex() == color.toHex()
-
                                     Circle()
                                         .fill(color)
                                         .frame(width: 48, height: 48)
@@ -479,17 +320,12 @@ struct TierRowEditSheet: View {
                                 }
                             }
                             .padding(.vertical, 8)
-
                             Divider()
-
                             HStack {
-
                                 Text("カスタムカラー")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
-
                                 Spacer()
-
                                 ColorPicker(
                                     "",
                                     selection: $editedColor,
@@ -505,7 +341,6 @@ struct TierRowEditSheet: View {
 
                     // ── テキストカラー ──
                     Section("テキストカラー") {
-
                         let presetTextColors: [Color] = [
                             Color(hex: "#000000"),
                             Color(hex: "#FFFFFF"),
@@ -516,7 +351,6 @@ struct TierRowEditSheet: View {
                             Color(hex: "#007AFF"),
                             Color(hex: "#AF52DE"),
                         ]
-
                         LazyVGrid(
                             columns: Array(
                                 repeating: GridItem(.flexible()),
@@ -524,14 +358,10 @@ struct TierRowEditSheet: View {
                             ),
                             spacing: 12
                         ) {
-
                             ForEach(0..<presetTextColors.count, id: \.self) { i in
-
                                 let color = presetTextColors[i]
-
                                 let isSelected =
                                     editedTextColor.toHex() == color.toHex()
-
                                 Circle()
                                     .fill(color)
                                     .frame(width: 48, height: 48)
@@ -572,15 +402,11 @@ struct TierRowEditSheet: View {
                             }
                         }
                         .padding(.vertical, 8)
-
                         HStack {
-
                             Text("カスタムカラー")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-
                             Spacer()
-
                             ColorPicker(
                                 "",
                                 selection: $editedTextColor,
@@ -596,41 +422,29 @@ struct TierRowEditSheet: View {
             }
             .navigationTitle("ラベルを編集")
             .navigationBarTitleDisplayMode(.inline)
-
             .toolbar {
-
                 ToolbarItem(placement: .cancellationAction) {
-
                     Button("キャンセル") {
                         dismiss()
                     }
                 }
-
                 ToolbarItem(placement: .confirmationAction) {
-
                     Button("完了") {
-
                         if !editedName
                             .trimmingCharacters(in: .whitespaces)
                             .isEmpty {
-
                             row.tierName = editedName
                         }
-
                         row.color = editedColor.toHex()
                         row.textColorHex = editedTextColor.toHex()
-
                         row.labelSizeOverride = editedLabelSize
                         row.labelTextSizeOverride = editedTextSize
                         row.rowItemSizeOverride = editedRowItemSize
-
                         let appliedSize =
                             editedRowItemSize ?? vm.defaultItemSize
-
                         for i in row.items.indices {
                             row.items[i].itemSize = appliedSize
                         }
-
                         dismiss()
                     }
                     .bold()
