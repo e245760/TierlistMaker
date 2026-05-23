@@ -47,7 +47,7 @@ struct TierRowEditSheet: View {
                                 .minimumScaleFactor(0.5)
                                 .lineLimit(1)
                                 .frame(width: vm.defaultLabelSize.width)
-                                .frame(height: 65)
+                                .frame(maxHeight: .infinity)
                                 .background(editedColor)
                                 .foregroundColor(editedTextColor)
                             HStack(spacing: 4) {
@@ -63,6 +63,7 @@ struct TierRowEditSheet: View {
                             .frame(maxWidth: .infinity, minHeight: 65)
                             .background(Color(.systemGray5))
                         }
+                        .frame(height: 65)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                         .shadow(color: .black.opacity(0.1), radius: 4)
                         .padding(.horizontal, 24)

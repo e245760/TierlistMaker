@@ -38,7 +38,7 @@ struct HomeView: View {
     private func openEditor(with saveData: TierListSaveData?) {
         let vm = TierListViewModel()
         if let saveData {
-            vm.load(from: saveData)     // 保存済みの TierTheme を復元
+            vm.load(from: saveData)
             editorSession = EditorSession(
                 id: saveData.id,
                 vm: vm,
@@ -46,8 +46,8 @@ struct HomeView: View {
                 createdAt: saveData.createdAt
             )
         } else {
-            // 新規作成: TierTheme はデフォルト (.classic) をそのまま使う
-            // AppTheme（アプリのlight/dark）とは独立しているため引き継ぎ不要
+            // 新規作成: アプリテーマに合わせて TierTheme を初期化
+            vm.tierTheme = appTheme == .dark ? .dark : .classic
             editorSession = EditorSession(
                 id: UUID(),
                 vm: vm,

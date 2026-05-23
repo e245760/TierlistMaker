@@ -34,29 +34,23 @@ enum ItemSize: String, CaseIterable, Codable {
 }
 
 enum ItemTextSize: String, CaseIterable, Codable {
-    case xSmall = "xSmall"
     case small  = "small"
     case medium = "medium"
     case large  = "large"
-    case xLarge = "xLarge"
 
     var fontSize: CGFloat {
         switch self {
-        case .xSmall: return 9
         case .small:  return 11
         case .medium: return 13
         case .large:  return 15
-        case .xLarge: return 18
         }
     }
 
     var label: String {
         switch self {
-        case .xSmall: return "極小"
         case .small:  return "小"
         case .medium: return "中"
         case .large:  return "大"
-        case .xLarge: return "極大"
         }
     }
 }

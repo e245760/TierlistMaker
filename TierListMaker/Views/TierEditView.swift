@@ -95,6 +95,7 @@ struct TierEditView: View {
                                 Color.clear.frame(height: 20)
                             }
                         }
+                        .environment(\.colorScheme, vm.tierTheme.colorScheme)
                         .onPreferenceChange(RowFramePreferenceKey.self) { frames in
                             rowFrames = frames
                         }
@@ -121,38 +122,6 @@ struct TierEditView: View {
                                 withAnimation(.spring()) { showAddHub = false }
                             }
                             .zIndex(2)
-                    }
-
-                    // ── 背景ディム（プール） ──
-                    if showPool {
-                        Color.black.opacity(0.3)
-                            .ignoresSafeArea()
-                            .onTapGesture {
-                                withAnimation(.easeOut(duration: 0.22)) {
-                                    showPool = false
-                                }
-                            }
-                            .zIndex(2)
-                    }
-
-                    // ── 未分類プールパネル ──
-                    if showPool {
-                        ItemPoolView(
-                            vm: vm,
-                            showAddItem: $showAddItem,
-                            showPool: $showPool,
-                            selectedItem: $selectedItem,
-                            draggingItem: $draggingItem,
-                            dragLocation: $dragLocation,
-                            hoveredRowId: $hoveredRowId,
-                            rowFrames: rowFrames,
-                            trayFrame: trayFrame
-                        )
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .bottom),
-                            removal: .offset(y: 500)
-                        ))
-                        .zIndex(3)
                     }
 
                     // ── 待機状態：アイテム表示 ──
@@ -443,7 +412,6 @@ struct TierEditView: View {
                     }
                 }
             }
-            .environment(\.colorScheme, vm.tierTheme.colorScheme)
             .environment(\.tierTheme, vm.tierTheme)
             .sheet(isPresented: $showAddItem) {
                 AddItemSheet(vm: vm)
@@ -464,6 +432,37 @@ struct TierEditView: View {
             }
             .sheet(isPresented: $showTableEdit) {
                 TableEditSheet(vm: vm)
+            }
+        }
+        .overlay {
+            if showPool {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.22)) {
+                            showPool = false
+                        }
+                    }
+            }
+        }
+        // ── 2段目：プールパネル（ディムより上） ──
+        .overlay(alignment: .bottom) {
+            if showPool {
+                ItemPoolView(
+                    vm: vm,
+                    showAddItem: $showAddItem,
+                    showPool: $showPool,
+                    selectedItem: $selectedItem,
+                    draggingItem: $draggingItem,
+                    dragLocation: $dragLocation,
+                    hoveredRowId: $hoveredRowId,
+                    rowFrames: rowFrames,
+                    trayFrame: trayFrame
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom),
+                    removal: .offset(y: 500)
+                ))
             }
         }
     }

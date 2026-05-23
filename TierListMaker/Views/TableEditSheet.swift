@@ -38,7 +38,7 @@ struct TableEditSheet: View {
                                 .minimumScaleFactor(0.5)
                                 .lineLimit(1)
                                 .frame(width: editedLabelSize.width)
-                                .frame(height: 65)
+                                .frame(maxHeight: .infinity)
                                 .background(Color(hex: "#FF7F7F"))
                                 .foregroundColor(.black)
 
@@ -55,6 +55,7 @@ struct TableEditSheet: View {
                             .frame(maxWidth: .infinity, minHeight: 65)
                             .background(editedTierTheme.rowBackground)
                         }
+                        .frame(height: 65)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                         .shadow(color: .black.opacity(0.1), radius: 4)
                         .padding(.horizontal, 24)
@@ -62,11 +63,11 @@ struct TableEditSheet: View {
                         .animation(.spring(), value: editedLabelTextSize)
                         .animation(.spring(), value: editedItemSize)
                         .animation(.spring(), value: editedItemTextSize)
+                        .environment(\.colorScheme, editedTierTheme.colorScheme)
                     }
                     .padding(.vertical, 16)
                 }
                 .frame(height: 150)
-                .environment(\.colorScheme, editedTierTheme.colorScheme)
 
                 Form {
 
