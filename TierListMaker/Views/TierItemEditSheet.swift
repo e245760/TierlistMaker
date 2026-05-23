@@ -188,15 +188,24 @@ struct ImageItemEditSheet: View {
     @Binding var item: TierItem
     @Environment(\.dismiss) var dismiss
 
+    // 反転
     @State private var editedFlipH: Bool
     @State private var editedFlipV: Bool
+    // クロップ・拡大縮小（ImageCropEditView の @Binding と接続）
+    @State private var editedCropOffsetX: CGFloat
+    @State private var editedCropOffsetY: CGFloat
+    @State private var editedCropScale: CGFloat
 
     init(item: Binding<TierItem>) {
         self._item = item
-        self._editedFlipH = State(initialValue: item.wrappedValue.isFlippedHorizontal)
-        self._editedFlipV = State(initialValue: item.wrappedValue.isFlippedVertical)
+        self._editedFlipH        = State(initialValue: item.wrappedValue.isFlippedHorizontal)
+        self._editedFlipV        = State(initialValue: item.wrappedValue.isFlippedVertical)
+        self._editedCropOffsetX  = State(initialValue: item.wrappedValue.cropOffsetX)
+        self._editedCropOffsetY  = State(initialValue: item.wrappedValue.cropOffsetY)
+        self._editedCropScale    = State(initialValue: item.wrappedValue.cropScale)
     }
 
+    /// プレビュー用アイテム（編集中の値をリアルタイムに反映）
     var previewItem: TierItem {
         TierItem(
             id: item.id,
@@ -204,8 +213,15 @@ struct ImageItemEditSheet: View {
             imageData: item.imageData,
             itemSize: item.itemSize,
             isFlippedHorizontal: editedFlipH,
-            isFlippedVertical: editedFlipV
+            isFlippedVertical: editedFlipV,
+            cropOffsetX: editedCropOffsetX,
+            cropOffsetY: editedCropOffsetY,
+            cropScale: editedCropScale
         )
+    }
+
+    private var hasCustomCrop: Bool {
+        editedCropOffsetX != 0 || editedCropOffsetY != 0 || editedCropScale != 1.0
     }
 
     var body: some View {
@@ -222,13 +238,40 @@ struct ImageItemEditSheet: View {
                         TierItemView(item: previewItem)
                             .animation(.spring(), value: editedFlipH)
                             .animation(.spring(), value: editedFlipV)
+                            .animation(.spring(), value: editedCropOffsetX)
+                            .animation(.spring(), value: editedCropOffsetY)
+                            .animation(.spring(), value: editedCropScale)
                     }
                     .padding(.vertical, 16)
                 }
                 .frame(height: 130)
 
                 Form {
-                    // 反転
+
+                    // ── 切り取り・拡大縮小 ──
+                    Section("切り取り・拡大縮小") {
+                        NavigationLink {
+                            ImageCropEditView(
+                                offsetX: $editedCropOffsetX,
+                                offsetY: $editedCropOffsetY,
+                                scale: $editedCropScale,
+                                imageData: item.imageData,
+                                itemSize: item.itemSize
+                            )
+                        } label: {
+                            HStack {
+                                Label("切り取り範囲を編集", systemImage: "crop.rotate")
+                                Spacer()
+                                if hasCustomCrop {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.blue)
+                                        .font(.subheadline)
+                                }
+                            }
+                        }
+                    }
+
+                    // ── 反転 ──
                     Section("反転") {
                         HStack(spacing: 12) {
                             // 左右反転
@@ -287,6 +330,9 @@ struct ImageItemEditSheet: View {
                     Button("完了") {
                         item.isFlippedHorizontal = editedFlipH
                         item.isFlippedVertical   = editedFlipV
+                        item.cropOffsetX         = editedCropOffsetX
+                        item.cropOffsetY         = editedCropOffsetY
+                        item.cropScale           = editedCropScale
                         dismiss()
                     }
                     .bold()

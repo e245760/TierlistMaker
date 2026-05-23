@@ -9,6 +9,12 @@ struct TierItemView: View {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
+                    // クロップ：まずスケール変更、次にオフセット（正規化値 × フレームサイズ）
+                    .scaleEffect(item.cropScale)
+                    .offset(
+                        x: item.cropOffsetX * item.itemSize.width,
+                        y: item.cropOffsetY * item.itemSize.height
+                    )
                     .scaleEffect(
                         x: item.isFlippedHorizontal ? -1 : 1,
                         y: item.isFlippedVertical   ? -1 : 1

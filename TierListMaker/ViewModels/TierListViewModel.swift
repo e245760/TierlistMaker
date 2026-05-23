@@ -42,11 +42,23 @@ class TierListViewModel: ObservableObject {
         defaultLabelTextSize = size
     }
 
+    /// アイテムサイズを一括変更する。
+    /// サイズが変わると画像クロップの基準が変わるため、クロップ設定は無条件でリセットする。
     func applyItemSizeToAll(_ size: ItemSize) {
         defaultItemSize = size
-        for i in pool.indices { pool[i].itemSize = size }
+        for i in pool.indices {
+            pool[i].itemSize    = size
+            pool[i].cropOffsetX = 0
+            pool[i].cropOffsetY = 0
+            pool[i].cropScale   = 1.0
+        }
         for i in rows.indices {
-            for j in rows[i].items.indices { rows[i].items[j].itemSize = size }
+            for j in rows[i].items.indices {
+                rows[i].items[j].itemSize    = size
+                rows[i].items[j].cropOffsetX = 0
+                rows[i].items[j].cropOffsetY = 0
+                rows[i].items[j].cropScale   = 1.0
+            }
         }
     }
 
