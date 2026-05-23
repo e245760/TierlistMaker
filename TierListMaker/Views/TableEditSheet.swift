@@ -8,7 +8,7 @@ struct TableEditSheet: View {
     @State private var editedLabelTextSize: LabelTextSize
     @State private var editedItemSize: ItemSize
     @State private var editedItemTextSize: ItemTextSize
-    @State private var editedTheme: AppTheme
+    @State private var editedTierTheme: TierTheme
 
     init(vm: TierListViewModel) {
         self.vm = vm
@@ -16,7 +16,7 @@ struct TableEditSheet: View {
         self._editedLabelTextSize = State(initialValue: vm.defaultLabelTextSize)
         self._editedItemSize      = State(initialValue: vm.defaultItemSize)
         self._editedItemTextSize  = State(initialValue: vm.defaultItemTextSize)
-        self._editedTheme         = State(initialValue: vm.theme)
+        self._editedTierTheme     = State(initialValue: vm.tierTheme)
     }
 
     var body: some View {
@@ -53,7 +53,7 @@ struct TableEditSheet: View {
                             }
                             .padding(4)
                             .frame(maxWidth: .infinity, minHeight: 65)
-                            .background(Color(.systemGray5))
+                            .background(editedTierTheme.rowBackground)
                         }
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                         .shadow(color: .black.opacity(0.1), radius: 4)
@@ -66,23 +66,28 @@ struct TableEditSheet: View {
                     .padding(.vertical, 16)
                 }
                 .frame(height: 150)
-                .environment(\.colorScheme, editedTheme.colorScheme)
+                .environment(\.colorScheme, editedTierTheme.colorScheme)
 
                 Form {
 
                     // ── この表のテーマ ──
                     Section("この表のテーマ") {
-                        HStack(spacing: 12) {
-                            ForEach(AppTheme.allCases, id: \.self) { theme in
-                                let isSelected = editedTheme == theme
+                        // TierTheme.allCases を使うため、テーマを追加するとここが自動で更新される
+                        let columns = Array(
+                            repeating: GridItem(.flexible(), spacing: 10),
+                            count: min(TierTheme.allCases.count, 3)
+                        )
+                        LazyVGrid(columns: columns, spacing: 10) {
+                            ForEach(TierTheme.allCases, id: \.self) { theme in
+                                let isSelected = editedTierTheme == theme
                                 Button {
-                                    withAnimation(.spring()) { editedTheme = theme }
+                                    withAnimation(.spring()) { editedTierTheme = theme }
                                 } label: {
                                     VStack(spacing: 6) {
                                         Image(systemName: theme.icon)
                                             .font(.title2)
                                             .foregroundColor(isSelected ? .white : .primary)
-                                        Text(theme.label)
+                                        Text(theme.displayName)
                                             .font(.caption.bold())
                                             .foregroundColor(isSelected ? .white : .primary)
                                     }
@@ -230,7 +235,7 @@ struct TableEditSheet: View {
                         vm.applyLabelTextSizeToAll(editedLabelTextSize)
                         vm.applyItemSizeToAll(editedItemSize)
                         vm.applyItemTextSizeToAll(editedItemTextSize)
-                        vm.theme = editedTheme
+                        vm.tierTheme = editedTierTheme
                         dismiss()
                     }
                     .bold()

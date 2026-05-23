@@ -19,6 +19,8 @@ struct TierRowView: View {
 
     @State private var showEditSheet = false
     @State private var showDeleteAlert = false
+    
+    @Environment(\.tierTheme) private var tierTheme
 
     private var isHovered: Bool {
         hoveredRowId == row.id
@@ -112,7 +114,7 @@ struct TierRowView: View {
                 .background(
                     isHovered
                     ? Color.blue.opacity(0.15)
-                    : Color(.systemGray6)
+                    : tierTheme.rowBackground
                 )
                 .animation(
                     .easeInOut(duration: 0.15),
@@ -255,7 +257,7 @@ struct TierRowView: View {
                 maxWidth: .infinity,
                 minHeight: 70
             )
-            .background(Color(.systemGray6))
+            .background(tierTheme.rowBackground)
         }
         .frame(
             width: UIScreen.main.bounds.width,

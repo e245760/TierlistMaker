@@ -30,8 +30,6 @@ struct HomeView: View {
                 onSave:    { data in store.upsert(data) },
                 onDismiss: { editorSession = nil }
             )
-            // preferredColorScheme はここで指定しない
-            // → ContentView が vm.theme を使って内部で適用する
             .environment(\.appTheme, appTheme)
             .environment(\.setAppTheme, { appTheme = $0 })
         }
@@ -40,7 +38,7 @@ struct HomeView: View {
     private func openEditor(with saveData: TierListSaveData?) {
         let vm = TierListViewModel()
         if let saveData {
-            vm.load(from: saveData)          // 保存済みテーマを復元
+            vm.load(from: saveData)     // 保存済みの TierTheme を復元
             editorSession = EditorSession(
                 id: saveData.id,
                 vm: vm,
@@ -48,7 +46,8 @@ struct HomeView: View {
                 createdAt: saveData.createdAt
             )
         } else {
-            vm.theme = appTheme              // 新規作成はアプリテーマを引き継ぐ
+            // 新規作成: TierTheme はデフォルト (.classic) をそのまま使う
+            // AppTheme（アプリのlight/dark）とは独立しているため引き継ぎ不要
             editorSession = EditorSession(
                 id: UUID(),
                 vm: vm,

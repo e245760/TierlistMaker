@@ -12,6 +12,8 @@ struct ItemPoolView: View {
     let trayFrame: CGRect
 
     @State private var dragOffset: CGFloat = 0
+    
+    @Environment(\.tierTheme) private var tierTheme
 
     private let rows = Array(repeating: GridItem(.fixed(65), spacing: 6), count: 4)
     private let itemSize: CGFloat = 65
@@ -106,7 +108,7 @@ struct ItemPoolView: View {
         .offset(y: dragOffset)
         .animation(.spring(), value: dragOffset)
         .background(
-            Color(.systemBackground)
+            tierTheme.poolBackground
                 .ignoresSafeArea(edges: .bottom)
         )
     }

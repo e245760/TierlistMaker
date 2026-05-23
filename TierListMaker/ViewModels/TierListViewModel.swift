@@ -17,7 +17,7 @@ class TierListViewModel: ObservableObject {
     @Published var defaultLabelTextSize: LabelTextSize = .medium
     @Published var defaultItemSize: ItemSize = .square
     @Published var defaultItemTextSize: ItemTextSize = .large
-    @Published var theme: AppTheme = .light
+    @Published var tierTheme: TierTheme = .classic
 
     func addItem(label: String, imageData: Data? = nil) {
         let item = TierItem(
@@ -122,7 +122,7 @@ class TierListViewModel: ObservableObject {
             defaultLabelTextSize: defaultLabelTextSize,
             defaultItemSize: defaultItemSize,
             defaultItemTextSize: defaultItemTextSize,
-            theme: theme,
+            tierTheme: tierTheme,
             createdAt: createdAt,
             updatedAt: Date()
         )
@@ -135,6 +135,6 @@ class TierListViewModel: ObservableObject {
         defaultLabelTextSize = data.defaultLabelTextSize
         defaultItemSize      = data.defaultItemSize
         defaultItemTextSize  = data.defaultItemTextSize
-        theme                = data.theme
+        tierTheme            = data.tierTheme
     }
 }

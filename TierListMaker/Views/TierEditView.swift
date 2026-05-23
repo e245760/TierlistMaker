@@ -443,7 +443,8 @@ struct TierEditView: View {
                     }
                 }
             }
-            .environment(\.colorScheme, vm.theme.colorScheme)
+            .environment(\.colorScheme, vm.tierTheme.colorScheme)
+            .environment(\.tierTheme, vm.tierTheme)
             .sheet(isPresented: $showAddItem) {
                 AddItemSheet(vm: vm)
             }
