@@ -1,6 +1,5 @@
 import SwiftUI
 
-// エディタに渡すセッション情報をまとめた構造体
 private struct EditorSession: Identifiable {
     let id: UUID
     let vm: TierListViewModel
@@ -17,14 +16,10 @@ struct HomeView: View {
     var body: some View {
         TabView {
             LibraryView(store: store, onOpen: openEditor)
-                .tabItem {
-                    Label("ライブラリ", systemImage: "square.grid.2x2")
-                }
+                .tabItem { Label("ライブラリ", systemImage: "square.grid.2x2") }
 
             AppSettingsView()
-                .tabItem {
-                    Label("設定", systemImage: "gearshape")
-                }
+                .tabItem { Label("設定", systemImage: "gearshape") }
         }
         .fullScreenCover(item: $editorSession) { session in
             TierEditView(
@@ -32,10 +27,11 @@ struct HomeView: View {
                 saveId: session.id,
                 initialTitle: session.title,
                 createdAt: session.createdAt,
-                onSave: { data in store.upsert(data) },
+                onSave:    { data in store.upsert(data) },
                 onDismiss: { editorSession = nil }
             )
-            .preferredColorScheme(appTheme.colorScheme)
+            // preferredColorScheme はここで指定しない
+            // → ContentView が vm.theme を使って内部で適用する
             .environment(\.appTheme, appTheme)
             .environment(\.setAppTheme, { appTheme = $0 })
         }
@@ -44,7 +40,7 @@ struct HomeView: View {
     private func openEditor(with saveData: TierListSaveData?) {
         let vm = TierListViewModel()
         if let saveData {
-            vm.load(from: saveData)
+            vm.load(from: saveData)          // 保存済みテーマを復元
             editorSession = EditorSession(
                 id: saveData.id,
                 vm: vm,
@@ -52,6 +48,7 @@ struct HomeView: View {
                 createdAt: saveData.createdAt
             )
         } else {
+            vm.theme = appTheme              // 新規作成はアプリテーマを引き継ぐ
             editorSession = EditorSession(
                 id: UUID(),
                 vm: vm,

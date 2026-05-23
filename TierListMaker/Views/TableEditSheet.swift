@@ -4,17 +4,15 @@ struct TableEditSheet: View {
     @ObservedObject var vm: TierListViewModel
     @Environment(\.dismiss) var dismiss
 
-    // テーマ関連
-    @AppStorage("appTheme") private var appTheme: AppTheme = .light
-    @Environment(\.setAppTheme) private var setAppTheme
-
     @State private var editedLabelSize: LabelSize
     @State private var editedItemSize: ItemSize
+    @State private var editedTheme: AppTheme     // ← 追加（ローカル管理）
 
     init(vm: TierListViewModel) {
         self.vm = vm
         self._editedLabelSize = State(initialValue: vm.defaultLabelSize)
         self._editedItemSize  = State(initialValue: vm.defaultItemSize)
+        self._editedTheme     = State(initialValue: vm.theme)  // ← 追加
     }
 
     var body: some View {
@@ -40,11 +38,7 @@ struct TableEditSheet: View {
 
                             HStack(spacing: 4) {
                                 ForEach(0..<2, id: \.self) { _ in
-                                    let previewItem = TierItem(
-                                        label: "A",
-                                        itemSize: editedItemSize
-                                    )
-                                    TierItemView(item: previewItem)
+                                    TierItemView(item: TierItem(label: "A", itemSize: editedItemSize))
                                 }
                             }
                             .padding(4)
@@ -60,40 +54,31 @@ struct TableEditSheet: View {
                     .padding(.vertical, 16)
                 }
                 .frame(height: 150)
+                .environment(\.colorScheme, editedTheme.colorScheme)  // ← プレビューに即時反映
 
                 Form {
 
-                    // ── テーマ ──
-                    Section("テーマ") {
+                    // ── この表のテーマ ──
+                    Section("この表のテーマ") {
                         HStack(spacing: 12) {
                             ForEach(AppTheme.allCases, id: \.self) { theme in
-                                let isSelected = appTheme == theme
+                                let isSelected = editedTheme == theme
                                 Button {
-                                    withAnimation(.spring()) {
-                                        setAppTheme(theme)
-                                    }
+                                    withAnimation(.spring()) { editedTheme = theme }
                                 } label: {
                                     VStack(spacing: 6) {
                                         Image(systemName: theme.icon)
                                             .font(.title2)
-                                            .foregroundColor(
-                                                isSelected ? .white : .primary
-                                            )
+                                            .foregroundColor(isSelected ? .white : .primary)
                                         Text(theme.label)
                                             .font(.caption.bold())
-                                            .foregroundColor(
-                                                isSelected ? .white : .primary
-                                            )
+                                            .foregroundColor(isSelected ? .white : .primary)
                                     }
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 12)
                                     .background(
                                         RoundedRectangle(cornerRadius: 10)
-                                            .fill(
-                                                isSelected
-                                                ? Color.blue
-                                                : Color(.systemGray5)
-                                            )
+                                            .fill(isSelected ? Color.blue : Color(.systemGray5))
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -171,6 +156,7 @@ struct TableEditSheet: View {
                     Button("完了") {
                         vm.applyLabelSizeToAll(editedLabelSize)
                         vm.applyItemSizeToAll(editedItemSize)
+                        vm.theme = editedTheme   // ← 表のテーマだけ更新
                         dismiss()
                     }
                     .bold()
