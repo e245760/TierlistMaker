@@ -37,7 +37,7 @@ enum ItemTextSize: String, CaseIterable, Codable {
     case xSmall = "xSmall"
     case small  = "small"
     case medium = "medium"
-    case large  = "large"   // デフォルト
+    case large  = "large"
     case xLarge = "xLarge"
 
     var fontSize: CGFloat {
@@ -74,9 +74,14 @@ struct TierItem: Identifiable, Codable, Equatable {
     var isFlippedHorizontal: Bool
     var isFlippedVertical: Bool
     // 画像用：クロップ（正規化値。itemSizeの幅・高さに対する比率）
-    var cropOffsetX: CGFloat  // -1.0 〜 1.0、0が中央
-    var cropOffsetY: CGFloat  // -1.0 〜 1.0、0が中央
-    var cropScale: CGFloat    // 0.5 〜 5.0、1.0が等倍
+    var cropOffsetX: CGFloat    // -1.0 〜 1.0、0が中央
+    var cropOffsetY: CGFloat    // -1.0 〜 1.0、0が中央
+    var cropScale: CGFloat      // 0.5 〜 5.0、1.0が等倍
+    // 画像用：はみ出し制御
+    /// true のとき、スケール・オフセットをグレー背景が見えない範囲に制限する
+    var cropContain: Bool
+    /// true のとき（cropContain = false 時のみ有効）、グレー背景の代わりに透明を使う
+    var cropTransparentBg: Bool
 
     init(
         id: UUID = UUID(),
@@ -90,7 +95,9 @@ struct TierItem: Identifiable, Codable, Equatable {
         isFlippedVertical: Bool = false,
         cropOffsetX: CGFloat = 0,
         cropOffsetY: CGFloat = 0,
-        cropScale: CGFloat = 1.0
+        cropScale: CGFloat = 1.0,
+        cropContain: Bool = true,
+        cropTransparentBg: Bool = false
     ) {
         self.id                  = id
         self.label               = label
@@ -104,15 +111,18 @@ struct TierItem: Identifiable, Codable, Equatable {
         self.cropOffsetX         = cropOffsetX
         self.cropOffsetY         = cropOffsetY
         self.cropScale           = cropScale
+        self.cropContain         = cropContain
+        self.cropTransparentBg   = cropTransparentBg
     }
 
-    // MARK: - Codable（後方互換：旧データにクロップキーが無くてもデフォルト値で復元）
+    // MARK: - Codable（後方互換：旧キーが無い場合はデフォルト値）
 
     enum CodingKeys: String, CodingKey {
         case id, label, imageData, itemSize, textSize
         case textColorHex, backgroundColorHex
         case isFlippedHorizontal, isFlippedVertical
         case cropOffsetX, cropOffsetY, cropScale
+        case cropContain, cropTransparentBg
     }
 
     init(from decoder: Decoder) throws {
@@ -126,9 +136,10 @@ struct TierItem: Identifiable, Codable, Equatable {
         backgroundColorHex  = try c.decode(String.self,        forKey: .backgroundColorHex)
         isFlippedHorizontal = try c.decode(Bool.self,          forKey: .isFlippedHorizontal)
         isFlippedVertical   = try c.decode(Bool.self,          forKey: .isFlippedVertical)
-        // 旧データには存在しないキーはデフォルト値にフォールバック
         cropOffsetX         = try c.decodeIfPresent(CGFloat.self, forKey: .cropOffsetX) ?? 0
         cropOffsetY         = try c.decodeIfPresent(CGFloat.self, forKey: .cropOffsetY) ?? 0
         cropScale           = try c.decodeIfPresent(CGFloat.self, forKey: .cropScale)   ?? 1.0
+        cropContain         = try c.decodeIfPresent(Bool.self,    forKey: .cropContain) ?? true
+        cropTransparentBg   = try c.decodeIfPresent(Bool.self,    forKey: .cropTransparentBg) ?? false
     }
 }
