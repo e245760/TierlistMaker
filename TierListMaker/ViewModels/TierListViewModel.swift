@@ -16,10 +16,16 @@ class TierListViewModel: ObservableObject {
     @Published var defaultLabelSize: LabelSize = .narrow
     @Published var defaultLabelTextSize: LabelTextSize = .medium
     @Published var defaultItemSize: ItemSize = .square
-    @Published var theme: AppTheme = .light   // ← 追加
+    @Published var defaultItemTextSize: ItemTextSize = .large
+    @Published var theme: AppTheme = .light
 
     func addItem(label: String, imageData: Data? = nil) {
-        let item = TierItem(label: label, imageData: imageData, itemSize: defaultItemSize)
+        let item = TierItem(
+            label: label,
+            imageData: imageData,
+            itemSize: defaultItemSize,
+            textSize: defaultItemTextSize
+        )
         pool.append(item)
         itemAddedCount += 1
     }
@@ -30,40 +36,47 @@ class TierListViewModel: ObservableObject {
 
     func applyLabelSizeToAll(_ size: LabelSize) {
         defaultLabelSize = size
-        for i in rows.indices { rows[i].labelSizeOverride = nil }
     }
 
     func applyLabelTextSizeToAll(_ size: LabelTextSize) {
         defaultLabelTextSize = size
-        for i in rows.indices { rows[i].labelTextSizeOverride = nil }
     }
 
     func applyItemSizeToAll(_ size: ItemSize) {
         defaultItemSize = size
         for i in pool.indices { pool[i].itemSize = size }
         for i in rows.indices {
-            rows[i].rowItemSizeOverride = nil
             for j in rows[i].items.indices { rows[i].items[j].itemSize = size }
         }
     }
 
-    func applyItemSizeToRow(_ size: ItemSize, rowId: UUID) {
-        guard let idx = rows.firstIndex(where: { $0.id == rowId }) else { return }
-        rows[idx].rowItemSizeOverride = size
-        for j in rows[idx].items.indices { rows[idx].items[j].itemSize = size }
+    func applyItemTextSizeToAll(_ size: ItemTextSize) {
+        defaultItemTextSize = size
+        for i in pool.indices { pool[i].textSize = size }
+        for i in rows.indices {
+            for j in rows[i].items.indices { rows[i].items[j].textSize = size }
+        }
     }
 
     func moveItem(_ item: TierItem, toRowId rowId: UUID) {
+        // selectedItem は選択時点のコピーなので、IDで最新版を解決してから移動する
+        let current = pool.first(where: { $0.id == item.id })
+            ?? rows.flatMap(\.items).first(where: { $0.id == item.id })
+            ?? item
         pool.removeAll { $0.id == item.id }
         for i in rows.indices { rows[i].items.removeAll { $0.id == item.id } }
         if let idx = rows.firstIndex(where: { $0.id == rowId }) {
-            rows[idx].items.append(item)
+            rows[idx].items.append(current)
         }
     }
 
     func returnToPool(_ item: TierItem) {
+        // 同様にIDで最新版を解決してからプールに戻す
+        let current = pool.first(where: { $0.id == item.id })
+            ?? rows.flatMap(\.items).first(where: { $0.id == item.id })
+            ?? item
         for i in rows.indices { rows[i].items.removeAll { $0.id == item.id } }
-        if !pool.contains(item) { pool.append(item) }
+        if !pool.contains(where: { $0.id == item.id }) { pool.append(current) }
     }
 
     func removeRow(id: UUID) {
@@ -96,18 +109,20 @@ class TierListViewModel: ObservableObject {
             defaultLabelSize: defaultLabelSize,
             defaultLabelTextSize: defaultLabelTextSize,
             defaultItemSize: defaultItemSize,
-            theme: theme,          // ← 追加
+            defaultItemTextSize: defaultItemTextSize,
+            theme: theme,
             createdAt: createdAt,
             updatedAt: Date()
         )
     }
 
     func load(from data: TierListSaveData) {
-        rows               = data.rows
-        pool               = data.pool
-        defaultLabelSize   = data.defaultLabelSize
+        rows                 = data.rows
+        pool                 = data.pool
+        defaultLabelSize     = data.defaultLabelSize
         defaultLabelTextSize = data.defaultLabelTextSize
-        defaultItemSize    = data.defaultItemSize
-        theme              = data.theme   // ← 追加
+        defaultItemSize      = data.defaultItemSize
+        defaultItemTextSize  = data.defaultItemTextSize
+        theme                = data.theme
     }
 }

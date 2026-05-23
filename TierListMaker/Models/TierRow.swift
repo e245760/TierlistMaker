@@ -33,7 +33,7 @@ enum LabelSize: String, CaseIterable, Codable {
 
 enum LabelTextSize: String, CaseIterable, Codable {
     case small  = "small"
-    case medium = "medium"  // デフォルト
+    case medium = "medium"
     case large  = "large"
 
     var fontSize: CGFloat {
@@ -59,29 +59,20 @@ struct TierRow: Identifiable, Codable {
     var color: String
     var textColorHex: String
     var items: [TierItem]
-    var labelSizeOverride: LabelSize?
-    var labelTextSizeOverride: LabelTextSize?
-    var rowItemSizeOverride: ItemSize?
 
-    static let maxLabelLength = 5  // 固定5文字
+    static let maxLabelLength = 5
 
     init(
         id: UUID = UUID(),
         tierName: String,
         color: String,
         textColorHex: String = "#000000",
-        items: [TierItem] = [],
-        labelSizeOverride: LabelSize? = nil,
-        labelTextSizeOverride: LabelTextSize? = nil,
-        rowItemSizeOverride: ItemSize? = nil
+        items: [TierItem] = []
     ) {
         self.id = id
         self.tierName = tierName
         self.color = color
         self.textColorHex = textColorHex
         self.items = items
-        self.labelSizeOverride = labelSizeOverride
-        self.labelTextSizeOverride = labelTextSizeOverride
-        self.rowItemSizeOverride = rowItemSizeOverride
     }
 }

@@ -28,15 +28,9 @@ struct TierRowView: View {
     // 解決済み設定値
     // ─────────────────────
 
-    private var effectiveLabelSize: LabelSize {
-        row.labelSizeOverride ?? vm.defaultLabelSize
-    }
-    private var effectiveTextSize: LabelTextSize {
-        row.labelTextSizeOverride ?? vm.defaultLabelTextSize
-    }
-    private var effectiveItemSize: ItemSize {
-        row.rowItemSizeOverride ?? vm.defaultItemSize
-    }
+    private var effectiveLabelSize: LabelSize { vm.defaultLabelSize }
+    private var effectiveTextSize: LabelTextSize { vm.defaultLabelTextSize }
+    private var effectiveItemSize: ItemSize { vm.defaultItemSize }
 
     var body: some View {
         ZStack(alignment: .trailing) {

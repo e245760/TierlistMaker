@@ -21,10 +21,8 @@ struct TextItemEditSheet: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var editedLabel: String
-    @State private var editedTextSize: ItemTextSize
     @State private var editedTextColor: Color
     @State private var editedBgColor: Color
-    @State private var editedSize: ItemSize
 
     private let maxLength = 12
 
@@ -53,20 +51,18 @@ struct TextItemEditSheet: View {
     init(item: Binding<TierItem>) {
         self._item = item
         self._editedLabel     = State(initialValue: item.wrappedValue.label)
-        self._editedTextSize  = State(initialValue: item.wrappedValue.textSize)
         self._editedTextColor = State(initialValue: Color(hex: item.wrappedValue.textColorHex))
         self._editedBgColor   = State(initialValue: Color(hex: item.wrappedValue.backgroundColorHex))
-        self._editedSize      = State(initialValue: item.wrappedValue.itemSize)
     }
 
-    // プレビュー用アイテム
+    // プレビュー用アイテム（サイズはグローバル設定を引き継ぎ）
     var previewItem: TierItem {
         TierItem(
             id: item.id,
             label: editedLabel,
             imageData: nil,
-            itemSize: editedSize,
-            textSize: editedTextSize,
+            itemSize: item.itemSize,
+            textSize: item.textSize,
             textColorHex: editedTextColor.toHex(),
             backgroundColorHex: editedBgColor.toHex()
         )
@@ -84,8 +80,6 @@ struct TextItemEditSheet: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                         TierItemView(item: previewItem)
-                            .animation(.spring(), value: editedSize)
-                            .animation(.spring(), value: editedTextSize)
                     }
                     .padding(.vertical, 16)
                 }
@@ -103,47 +97,12 @@ struct TextItemEditSheet: View {
                             }
                     }
 
-                    // アイテムサイズ
-                    Section("アイテムサイズ") {
-                        sizeSelector(selected: $editedSize)
-                    }
-
-                    // テキストサイズ
-                    Section("テキストサイズ") {
-                        HStack(spacing: 8) {
-                            ForEach(ItemTextSize.allCases, id: \.self) { size in
-                                let isSelected = editedTextSize == size
-                                Button {
-                                    withAnimation(.spring()) { editedTextSize = size }
-                                } label: {
-                                    VStack(spacing: 4) {
-                                        Text("A")
-                                            .font(.system(size: size.fontSize, weight: .bold))
-                                            .foregroundColor(isSelected ? .white : .primary)
-                                            .frame(height: 24)
-                                        Text(size.label)
-                                            .font(.system(size: 9).bold())
-                                            .foregroundColor(isSelected ? .white : .secondary)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(isSelected ? Color.blue : Color(.systemGray5))
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-
                     // 背景色
                     Section("背景色") {
                         colorGrid(colors: presetBgColors, selected: $editedBgColor)
                         customColorPicker(label: "カスタムカラー", selected: $editedBgColor)
                     }
-                    
+
                     // テキストカラー
                     Section("テキストカラー") {
                         colorGrid(colors: presetColors, selected: $editedTextColor)
@@ -160,10 +119,8 @@ struct TextItemEditSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") {
                         item.label              = editedLabel
-                        item.textSize           = editedTextSize
                         item.textColorHex       = editedTextColor.toHex()
                         item.backgroundColorHex = editedBgColor.toHex()
-                        item.itemSize           = editedSize
                         dismiss()
                     }
                     .bold()
@@ -231,13 +188,11 @@ struct ImageItemEditSheet: View {
     @Binding var item: TierItem
     @Environment(\.dismiss) var dismiss
 
-    @State private var editedSize: ItemSize
     @State private var editedFlipH: Bool
     @State private var editedFlipV: Bool
 
     init(item: Binding<TierItem>) {
         self._item = item
-        self._editedSize  = State(initialValue: item.wrappedValue.itemSize)
         self._editedFlipH = State(initialValue: item.wrappedValue.isFlippedHorizontal)
         self._editedFlipV = State(initialValue: item.wrappedValue.isFlippedVertical)
     }
@@ -247,7 +202,7 @@ struct ImageItemEditSheet: View {
             id: item.id,
             label: item.label,
             imageData: item.imageData,
-            itemSize: editedSize,
+            itemSize: item.itemSize,
             isFlippedHorizontal: editedFlipH,
             isFlippedVertical: editedFlipV
         )
@@ -265,7 +220,6 @@ struct ImageItemEditSheet: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                         TierItemView(item: previewItem)
-                            .animation(.spring(), value: editedSize)
                             .animation(.spring(), value: editedFlipH)
                             .animation(.spring(), value: editedFlipV)
                     }
@@ -274,11 +228,6 @@ struct ImageItemEditSheet: View {
                 .frame(height: 130)
 
                 Form {
-                    // アイテムサイズ
-                    Section("アイテムサイズ") {
-                        sizeSelector(selected: $editedSize)
-                    }
-
                     // 反転
                     Section("反転") {
                         HStack(spacing: 12) {
@@ -336,7 +285,6 @@ struct ImageItemEditSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") {
-                        item.itemSize            = editedSize
                         item.isFlippedHorizontal = editedFlipH
                         item.isFlippedVertical   = editedFlipV
                         dismiss()
@@ -346,34 +294,4 @@ struct ImageItemEditSheet: View {
             }
         }
     }
-}
-
-// 共通のサイズ選択UI
-@ViewBuilder
-func sizeSelector(selected: Binding<ItemSize>) -> some View {
-    HStack(spacing: 12) {
-        ForEach(ItemSize.allCases, id: \.self) { size in
-            let isSelected = selected.wrappedValue == size
-            Button {
-                withAnimation(.spring()) { selected.wrappedValue = size }
-            } label: {
-                VStack(spacing: 6) {
-                    Image(systemName: size.icon)
-                        .font(.title2)
-                        .foregroundColor(isSelected ? .white : .primary)
-                    Text(size.label)
-                        .font(.caption.bold())
-                        .foregroundColor(isSelected ? .white : .primary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(isSelected ? Color.blue : Color(.systemGray5))
-                )
-            }
-            .buttonStyle(.plain)
-        }
-    }
-    .padding(.vertical, 4)
 }

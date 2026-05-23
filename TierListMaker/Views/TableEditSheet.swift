@@ -5,14 +5,18 @@ struct TableEditSheet: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var editedLabelSize: LabelSize
+    @State private var editedLabelTextSize: LabelTextSize
     @State private var editedItemSize: ItemSize
-    @State private var editedTheme: AppTheme     // ← 追加（ローカル管理）
+    @State private var editedItemTextSize: ItemTextSize
+    @State private var editedTheme: AppTheme
 
     init(vm: TierListViewModel) {
         self.vm = vm
-        self._editedLabelSize = State(initialValue: vm.defaultLabelSize)
-        self._editedItemSize  = State(initialValue: vm.defaultItemSize)
-        self._editedTheme     = State(initialValue: vm.theme)  // ← 追加
+        self._editedLabelSize     = State(initialValue: vm.defaultLabelSize)
+        self._editedLabelTextSize = State(initialValue: vm.defaultLabelTextSize)
+        self._editedItemSize      = State(initialValue: vm.defaultItemSize)
+        self._editedItemTextSize  = State(initialValue: vm.defaultItemTextSize)
+        self._editedTheme         = State(initialValue: vm.theme)
     }
 
     var body: some View {
@@ -30,7 +34,9 @@ struct TableEditSheet: View {
 
                         HStack(spacing: 0) {
                             Text("S")
-                                .font(.title2.bold())
+                                .font(.system(size: editedLabelTextSize.fontSize, weight: .bold))
+                                .minimumScaleFactor(0.5)
+                                .lineLimit(1)
                                 .frame(width: editedLabelSize.width)
                                 .frame(height: 65)
                                 .background(Color(hex: "#FF7F7F"))
@@ -38,7 +44,11 @@ struct TableEditSheet: View {
 
                             HStack(spacing: 4) {
                                 ForEach(0..<2, id: \.self) { _ in
-                                    TierItemView(item: TierItem(label: "A", itemSize: editedItemSize))
+                                    TierItemView(item: TierItem(
+                                        label: "A",
+                                        itemSize: editedItemSize,
+                                        textSize: editedItemTextSize
+                                    ))
                                 }
                             }
                             .padding(4)
@@ -49,12 +59,14 @@ struct TableEditSheet: View {
                         .shadow(color: .black.opacity(0.1), radius: 4)
                         .padding(.horizontal, 24)
                         .animation(.spring(), value: editedLabelSize)
+                        .animation(.spring(), value: editedLabelTextSize)
                         .animation(.spring(), value: editedItemSize)
+                        .animation(.spring(), value: editedItemTextSize)
                     }
                     .padding(.vertical, 16)
                 }
                 .frame(height: 150)
-                .environment(\.colorScheme, editedTheme.colorScheme)  // ← プレビューに即時反映
+                .environment(\.colorScheme, editedTheme.colorScheme)
 
                 Form {
 
@@ -88,7 +100,7 @@ struct TableEditSheet: View {
                     }
 
                     // ── ラベルサイズ ──
-                    Section("ラベルサイズ（全行に適用）") {
+                    Section("ラベルサイズ") {
                         HStack(spacing: 12) {
                             ForEach(LabelSize.allCases, id: \.self) { size in
                                 let isSelected = editedLabelSize == size
@@ -116,8 +128,38 @@ struct TableEditSheet: View {
                         .padding(.vertical, 4)
                     }
 
+                    // ── ラベルテキストサイズ ──
+                    Section("ラベルテキストサイズ") {
+                        HStack(spacing: 8) {
+                            ForEach(LabelTextSize.allCases, id: \.self) { size in
+                                let isSelected = editedLabelTextSize == size
+                                Button {
+                                    withAnimation(.spring()) { editedLabelTextSize = size }
+                                } label: {
+                                    VStack(spacing: 4) {
+                                        Text("A")
+                                            .font(.system(size: size.fontSize, weight: .bold))
+                                            .foregroundColor(isSelected ? .white : .primary)
+                                            .frame(height: 28)
+                                        Text(size.label)
+                                            .font(.system(size: 9).bold())
+                                            .foregroundColor(isSelected ? .white : .secondary)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(isSelected ? Color.blue : Color(.systemGray5))
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
                     // ── アイテムサイズ ──
-                    Section("アイテムサイズ（全アイテムに適用）") {
+                    Section("アイテムサイズ") {
                         HStack(spacing: 12) {
                             ForEach(ItemSize.allCases, id: \.self) { size in
                                 let isSelected = editedItemSize == size
@@ -144,6 +186,36 @@ struct TableEditSheet: View {
                         }
                         .padding(.vertical, 4)
                     }
+
+                    // ── アイテムテキストサイズ ──
+                    Section("アイテムテキストサイズ") {
+                        HStack(spacing: 8) {
+                            ForEach(ItemTextSize.allCases, id: \.self) { size in
+                                let isSelected = editedItemTextSize == size
+                                Button {
+                                    withAnimation(.spring()) { editedItemTextSize = size }
+                                } label: {
+                                    VStack(spacing: 4) {
+                                        Text("A")
+                                            .font(.system(size: size.fontSize, weight: .bold))
+                                            .foregroundColor(isSelected ? .white : .primary)
+                                            .frame(height: 28)
+                                        Text(size.label)
+                                            .font(.system(size: 9).bold())
+                                            .foregroundColor(isSelected ? .white : .secondary)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(isSelected ? Color.blue : Color(.systemGray5))
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
                 }
             }
             .navigationTitle("表の全体編集")
@@ -155,8 +227,10 @@ struct TableEditSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") {
                         vm.applyLabelSizeToAll(editedLabelSize)
+                        vm.applyLabelTextSizeToAll(editedLabelTextSize)
                         vm.applyItemSizeToAll(editedItemSize)
-                        vm.theme = editedTheme   // ← 表のテーマだけ更新
+                        vm.applyItemTextSizeToAll(editedItemTextSize)
+                        vm.theme = editedTheme
                         dismiss()
                     }
                     .bold()
