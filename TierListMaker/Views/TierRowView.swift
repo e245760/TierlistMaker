@@ -32,7 +32,7 @@ struct TierRowView: View {
         row.labelSizeOverride ?? vm.defaultLabelSize
     }
     private var effectiveTextSize: LabelTextSize {
-        row.labelTextSizeOverride ?? .medium
+        row.labelTextSizeOverride ?? vm.defaultLabelTextSize
     }
     private var effectiveItemSize: ItemSize {
         row.rowItemSizeOverride ?? vm.defaultItemSize

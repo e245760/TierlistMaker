@@ -12,20 +12,28 @@ struct RowFramePreferenceKey: PreferenceKey {
 
 struct ContentView: View {
     @StateObject var vm = TierListViewModel()
+
+    // シート・モーダル
     @State private var showAddItem = false
     @State private var showPool = false
-    @State private var selectedItem: TierItem? = nil
-    @State private var showItemEdit = false
-    @State private var tierListTitle = "ティア表"
-    @State private var isEditingTitle = false
     @State private var showTableEdit = false
-    @FocusState private var titleFocused: Bool
+    @State private var showItemEdit = false
+    @State private var showAddHub = false  // ＋ハブメニュー
 
+    // アイテム操作
+    @State private var selectedItem: TierItem? = nil
     @State private var draggingItem: TierItem? = nil
     @State private var dragLocation: CGPoint = .zero
-    @State private var rowFrames: [UUID: CGRect] = [:]
     @State private var hoveredRowId: UUID? = nil
-    @State private var trayFrame: CGRect = .zero  // トレイボタンのフレーム
+
+    // フレーム
+    @State private var rowFrames: [UUID: CGRect] = [:]
+    @State private var trayFrame: CGRect = .zero
+
+    // タイトル編集
+    @State private var tierListTitle = "ティア表"
+    @State private var isEditingTitle = false
+    @FocusState private var titleFocused: Bool
 
     private let maxTitleLength = 10
 
@@ -59,16 +67,13 @@ struct ContentView: View {
                                         }
                                     )
                                 }
-                                // スクロール余白
                                 Color.clear.frame(height: 20)
                             }
                         }
                         .onPreferenceChange(RowFramePreferenceKey.self) { frames in
                             rowFrames = frames
                         }
-                        // フローティングボタン(100pt) + フェード開始位置を考慮した表示領域
                         .frame(height: scrollGeo.size.height - 100)
-                        // 下端をグラデーションでぼかす
                         .mask(
                             VStack(spacing: 0) {
                                 Rectangle()
@@ -83,11 +88,20 @@ struct ContentView: View {
                     }
                     .zIndex(0)
 
-                    // ── 背景ディム ──
+                    // ── ＋ハブ背景ディム ──
+                    if showAddHub {
+                        Color.black.opacity(0.3)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.spring()) { showAddHub = false }
+                            }
+                            .zIndex(2)
+                    }
+
+                    // ── 背景ディム（プール） ──
                     if showPool {
                         Color.black.opacity(0.3)
                             .ignoresSafeArea()
-                            .transition(.opacity)
                             .onTapGesture {
                                 withAnimation(.easeOut(duration: 0.22)) {
                                     showPool = false
@@ -109,13 +123,11 @@ struct ContentView: View {
                             rowFrames: rowFrames,
                             trayFrame: trayFrame
                         )
-                        .transition(
-                                    .asymmetric(
-                                        insertion: .move(edge: .bottom),
-                                        removal: .offset(y: 500)
-                                    )
-                                )
-                                .zIndex(3)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .bottom),
+                            removal: .offset(y: 500)
+                        ))
+                        .zIndex(3)
                     }
 
                     // ── 待機状態：アイテム表示 ──
@@ -131,9 +143,7 @@ struct ContentView: View {
                                     showItemEdit = true
                                 } label: {
                                     ZStack(alignment: .topTrailing) {
-                                        // selectedItem から最新データを取得して表示
                                         TierItemView(item: latestItem(for: item) ?? item)
-
                                         Image(systemName: "pencil.circle.fill")
                                             .foregroundColor(.blue)
                                             .background(Color.white.clipShape(Circle()))
@@ -154,61 +164,98 @@ struct ContentView: View {
                         .zIndex(4)
                     }
 
-                    // ── フローティングボタン（待機・ドラッグ中はトレイのみ） ──
-                    HStack {
-                        if selectedItem == nil && draggingItem == nil {
-                            // 左：表全体編集ボタン（プール表示中は非表示）
-                            if !showPool {
+                    // ── ＋ハブのサブボタン（待機・ドラッグ中は非表示） ──
+                    if showAddHub && selectedItem == nil && draggingItem == nil {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 12) {
+                                // アイテム追加
                                 Button {
-                                    showTableEdit = true
+                                    withAnimation(.spring()) { showAddHub = false }
+                                    showAddItem = true
                                 } label: {
-                                    Image(systemName: "gearshape.fill")
-                                        .font(.title2.bold())
-                                        .frame(width: 50, height: 50)
-                                        .background(Color.blue)
-                                        .foregroundColor(.white)
-                                        .clipShape(Circle())
-                                        .shadow(radius: 4)
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "photo.badge.plus")
+                                            .font(.title3.bold())
+                                            .frame(width: 50, height: 50)
+                                            .background(Color.blue)
+                                            .foregroundColor(.white)
+                                            .clipShape(Circle())
+                                            .shadow(radius: 4)
+                                        Text("アイテムを追加")
+                                            .font(.subheadline.bold())
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .background(Color.black.opacity(0.6))
+                                            .clipShape(Capsule())
+                                    }
                                 }
-                                .padding(.leading, 20)
-                                .transition(.opacity.combined(with: .scale))
-                            } else {
-                                Color.clear
-                                    .frame(width: 50, height: 50)
-                                    .padding(.leading, 20)
-                            }
 
-                            Spacer()
-
-                            // 中：行追加ボタン（プール表示中は非表示）
-                            if !showPool {
-                                let isFull = vm.rows.count >= 8
+                                // 行追加
                                 Button {
+                                    withAnimation(.spring()) { showAddHub = false }
+                                    let isFull = vm.rows.count >= 8
                                     if !isFull { vm.addRow() }
                                 } label: {
-                                    Image(systemName: "plus")
-                                        .font(.title2.bold())
-                                        .frame(width: 50, height: 50)
-                                        .background(isFull ? Color(.systemGray3) : Color.blue)
-                                        .foregroundColor(.white)
-                                        .clipShape(Circle())
-                                        .shadow(radius: 4)
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "plus.rectangle")
+                                            .font(.title3.bold())
+                                            .frame(width: 50, height: 50)
+                                            .background(vm.rows.count >= 8 ? Color(.systemGray3) : Color.blue)
+                                            .foregroundColor(.white)
+                                            .clipShape(Circle())
+                                            .shadow(radius: 4)
+                                        Text(vm.rows.count >= 8 ? "行は最大8行です" : "行を追加")
+                                            .font(.subheadline.bold())
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .background(Color.black.opacity(0.6))
+                                            .clipShape(Capsule())
+                                    }
                                 }
-                                .disabled(isFull)
-                                .transition(.opacity.combined(with: .scale))
-                            } else {
-                                Color.clear.frame(width: 50, height: 50)
+                                .disabled(vm.rows.count >= 8)
                             }
+                            .padding(.leading, 20)
+                            .padding(.bottom, 8)
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
 
                             Spacer()
+                        }
+                        .padding(.bottom, 90)
+                        .zIndex(5)
+                    }
+
+                    // ── フローティングボタン ──
+                    HStack {
+                        // 左：＋ハブボタン（待機・ドラッグ・プール中は非表示）
+                        if selectedItem == nil && draggingItem == nil && !showPool {
+                            Button {
+                                withAnimation(.spring()) { showAddHub.toggle() }
+                            } label: {
+                                Image(systemName: showAddHub ? "xmark" : "plus")
+                                    .font(.title2.bold())
+                                    .frame(width: 50, height: 50)
+                                    .background(showAddHub ? Color(.systemGray3) : Color.blue)
+                                    .foregroundColor(.white)
+                                    .clipShape(Circle())
+                                    .shadow(radius: 4)
+                                    .rotationEffect(.degrees(showAddHub ? 90 : 0))
+                                    .animation(.spring(), value: showAddHub)
+                            }
+                            .padding(.leading, 20)
+                            .transition(.opacity.combined(with: .scale))
+                        } else if !showPool {
+                            Color.clear
+                                .frame(width: 50, height: 50)
+                                .padding(.leading, 20)
                         } else {
                             Color.clear
                                 .frame(width: 50, height: 50)
                                 .padding(.leading, 20)
-                            Spacer()
-                            Color.clear.frame(width: 50, height: 50)
-                            Spacer()
                         }
+
+                        Spacer()
 
                         // 右：トレイボタン（常に表示）
                         Button {
@@ -218,7 +265,10 @@ struct ContentView: View {
                                     selectedItem = nil
                                 }
                             } else {
-                                withAnimation(.spring()) { showPool.toggle() }
+                                withAnimation(.spring()) {
+                                    showAddHub = false
+                                    showPool.toggle()
+                                }
                             }
                         } label: {
                             ZStack(alignment: .topTrailing) {
@@ -248,16 +298,16 @@ struct ContentView: View {
                         .padding(.trailing, 20)
                         .background(
                             GeometryReader { trayGeo in
-                                Color.clear.onAppear {
-                                    trayFrame = trayGeo.frame(in: .global)
-                                }.onChange(of: trayGeo.frame(in: .global)) { newFrame in
-                                    trayFrame = newFrame
-                                }
+                                Color.clear
+                                    .onAppear { trayFrame = trayGeo.frame(in: .global) }
+                                    .onChange(of: trayGeo.frame(in: .global)) { newFrame in
+                                        trayFrame = newFrame
+                                    }
                             }
                         )
                     }
                     .padding(.bottom, 36)
-                    .zIndex(5)
+                    .zIndex(6)
 
                     // ── ドラッグ中のフローティングアイテム ──
                     if let item = draggingItem {
@@ -275,6 +325,17 @@ struct ContentView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // ── 左：戻るボタン（ホーム） ──
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        // 後ほど実装
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.body.bold())
+                    }
+                }
+
+                // ── 中央：タイトル ──
                 ToolbarItem(placement: .principal) {
                     if isEditingTitle {
                         HStack(spacing: 4) {
@@ -288,15 +349,11 @@ struct ContentView: View {
                                 .onSubmit { finishEditing() }
                                 .onChange(of: tierListTitle) { newValue in
                                     if newValue.count > maxTitleLength {
-                                        tierListTitle = String(
-                                            newValue.prefix(maxTitleLength)
-                                        )
+                                        tierListTitle = String(newValue.prefix(maxTitleLength))
                                     }
                                 }
                                 .frame(maxWidth: 160)
-                            Button {
-                                finishEditing()
-                            } label: {
+                            Button { finishEditing() } label: {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundColor(.blue)
                                     .font(.title3)
@@ -318,13 +375,28 @@ struct ContentView: View {
                         }
                     }
                 }
+
+                // ── 右：保存（プレビュー）＋ 設定 ──
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button {
+                        // 後ほど実装（保存・プレビュー）
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.body)
+                    }
+
+                    Button {
+                        showTableEdit = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.body)
+                    }
+                }
             }
             .sheet(isPresented: $showAddItem) {
                 AddItemSheet(vm: vm)
             }
-            // sheet
             .sheet(isPresented: $showItemEdit, onDismiss: {
-                // 編集後に selectedItem を最新データで更新
                 if let item = selectedItem {
                     selectedItem = latestItem(for: item)
                 }
@@ -351,8 +423,7 @@ struct ContentView: View {
         isEditingTitle = false
         titleFocused = false
     }
-    
-    // vm から最新のアイテムデータを取得するヘルパー
+
     private func latestItem(for item: TierItem) -> TierItem? {
         if let poolIdx = vm.poolIndex(for: item.id) {
             return vm.pool[poolIdx]

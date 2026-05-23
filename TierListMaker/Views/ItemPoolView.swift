@@ -58,16 +58,7 @@ struct ItemPoolView: View {
             HStack {
                 Text("未分類")
                     .font(.headline)
-
                 Spacer()
-
-                Button {
-                    showAddItem = true
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.blue)
-                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
