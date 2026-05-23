@@ -277,53 +277,55 @@ struct TierEditView: View {
 
                         Spacer()
 
-                        Button {
-                            if selectedItem != nil {
-                                withAnimation(.spring()) {
-                                    vm.returnToPool(selectedItem!)
-                                    selectedItem = nil
-                                }
-                            } else {
-                                withAnimation(.spring()) {
-                                    showAddHub = false
-                                    showPool.toggle()
-                                }
-                            }
-                        } label: {
-                            ZStack(alignment: .topTrailing) {
-                                Image(systemName: showPool ? "tray.fill" : "tray")
-                                    .font(.title2.bold())
-                                    .frame(width: 50, height: 50)
-                                    .background(
-                                        selectedItem != nil || draggingItem != nil
-                                            ? Color.orange
-                                            : showPool ? Color.orange : Color.blue
-                                    )
-                                    .foregroundColor(.white)
-                                    .clipShape(Circle())
-                                    .shadow(radius: 4)
-
-                                if !vm.pool.isEmpty && selectedItem == nil && draggingItem == nil {
-                                    Text("\(vm.pool.count)")
-                                        .font(.caption2.bold())
-                                        .foregroundColor(.white)
-                                        .padding(4)
-                                        .background(Color.red)
-                                        .clipShape(Circle())
-                                        .offset(x: 4, y: -4)
-                                }
-                            }
-                        }
-                        .padding(.trailing, 20)
-                        .background(
-                            GeometryReader { trayGeo in
-                                Color.clear
-                                    .onAppear { trayFrame = trayGeo.frame(in: .global) }
-                                    .onChange(of: trayGeo.frame(in: .global)) { newFrame in
-                                        trayFrame = newFrame
+                        if !showPool {
+                            Button {
+                                if selectedItem != nil {
+                                    withAnimation(.spring()) {
+                                        vm.returnToPool(selectedItem!)
+                                        selectedItem = nil
                                     }
+                                } else {
+                                    withAnimation(.spring()) {
+                                        showAddHub = false
+                                        showPool.toggle()
+                                    }
+                                }
+                            } label: {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(systemName: showPool ? "tray.fill" : "tray")
+                                        .font(.title2.bold())
+                                        .frame(width: 50, height: 50)
+                                        .background(
+                                            selectedItem != nil || draggingItem != nil
+                                                ? Color.orange
+                                                : showPool ? Color.orange : Color.blue
+                                        )
+                                        .foregroundColor(.white)
+                                        .clipShape(Circle())
+                                        .shadow(radius: 4)
+
+                                    if !vm.pool.isEmpty && selectedItem == nil && draggingItem == nil {
+                                        Text("\(vm.pool.count)")
+                                            .font(.caption2.bold())
+                                            .foregroundColor(.white)
+                                            .padding(4)
+                                            .background(Color.red)
+                                            .clipShape(Circle())
+                                            .offset(x: 4, y: -4)
+                                    }
+                                }
                             }
-                        )
+                            .padding(.trailing, 20)
+                            .background(
+                                GeometryReader { trayGeo in
+                                    Color.clear
+                                        .onAppear { trayFrame = trayGeo.frame(in: .global) }
+                                        .onChange(of: trayGeo.frame(in: .global)) { newFrame in
+                                            trayFrame = newFrame
+                                        }
+                                }
+                            )
+                        }
                     }
                     .padding(.bottom, 36)
                     .zIndex(6)
