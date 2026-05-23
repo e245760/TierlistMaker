@@ -10,15 +10,41 @@ struct RowFramePreferenceKey: PreferenceKey {
     }
 }
 
-struct ContentView: View {
-    @StateObject var vm = TierListViewModel()
+struct TierEditView: View {
+    // ── vm は HomeView が所有し外から注入 ──
+    @ObservedObject var vm: TierListViewModel
+
+    let saveId: UUID
+    let createdAt: Date
+    let onSave: (TierListSaveData) -> Void
+    let onDismiss: () -> Void
+
+    // タイトル
+    @State private var tierListTitle: String
+
+    init(
+        vm: TierListViewModel,
+        saveId: UUID,
+        initialTitle: String = "ティア表",
+        createdAt: Date = Date(),
+        onSave: @escaping (TierListSaveData) -> Void,
+        onDismiss: @escaping () -> Void
+    ) {
+        self.vm = vm
+        self.saveId = saveId
+        self.createdAt = createdAt
+        self.onSave = onSave
+        self.onDismiss = onDismiss
+        self._tierListTitle = State(initialValue: initialTitle)
+    }
 
     // シート・モーダル
     @State private var showAddItem = false
     @State private var showPool = false
     @State private var showTableEdit = false
     @State private var showItemEdit = false
-    @State private var showAddHub = false  // ＋ハブメニュー
+    @State private var showAddHub = false
+    @State private var showSavedFeedback = false
 
     // アイテム操作
     @State private var selectedItem: TierItem? = nil
@@ -31,7 +57,6 @@ struct ContentView: View {
     @State private var trayFrame: CGRect = .zero
 
     // タイトル編集
-    @State private var tierListTitle = "ティア表"
     @State private var isEditingTitle = false
     @FocusState private var titleFocused: Bool
 
@@ -138,7 +163,6 @@ struct ContentView: View {
                                 Text("配置先のティアをタップ")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-
                                 Button {
                                     showItemEdit = true
                                 } label: {
@@ -152,7 +176,6 @@ struct ContentView: View {
                                     }
                                 }
                                 .buttonStyle(.plain)
-
                                 Text("タップして編集")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
@@ -164,11 +187,10 @@ struct ContentView: View {
                         .zIndex(4)
                     }
 
-                    // ── ＋ハブのサブボタン（待機・ドラッグ中は非表示） ──
+                    // ── ＋ハブのサブボタン ──
                     if showAddHub && selectedItem == nil && draggingItem == nil {
                         HStack {
                             VStack(alignment: .leading, spacing: 12) {
-                                // アイテム追加
                                 Button {
                                     withAnimation(.spring()) { showAddHub = false }
                                     showAddItem = true
@@ -191,7 +213,6 @@ struct ContentView: View {
                                     }
                                 }
 
-                                // 行追加
                                 Button {
                                     withAnimation(.spring()) { showAddHub = false }
                                     let isFull = vm.rows.count >= 8
@@ -201,7 +222,11 @@ struct ContentView: View {
                                         Image(systemName: "plus.rectangle")
                                             .font(.title3.bold())
                                             .frame(width: 50, height: 50)
-                                            .background(vm.rows.count >= 8 ? Color(.systemGray3) : Color.blue)
+                                            .background(
+                                                vm.rows.count >= 8
+                                                ? Color(.systemGray3)
+                                                : Color.blue
+                                            )
                                             .foregroundColor(.white)
                                             .clipShape(Circle())
                                             .shadow(radius: 4)
@@ -228,7 +253,6 @@ struct ContentView: View {
 
                     // ── フローティングボタン ──
                     HStack {
-                        // 左：＋ハブボタン（待機・ドラッグ・プール中は非表示）
                         if selectedItem == nil && draggingItem == nil && !showPool {
                             Button {
                                 withAnimation(.spring()) { showAddHub.toggle() }
@@ -245,10 +269,6 @@ struct ContentView: View {
                             }
                             .padding(.leading, 20)
                             .transition(.opacity.combined(with: .scale))
-                        } else if !showPool {
-                            Color.clear
-                                .frame(width: 50, height: 50)
-                                .padding(.leading, 20)
                         } else {
                             Color.clear
                                 .frame(width: 50, height: 50)
@@ -257,7 +277,6 @@ struct ContentView: View {
 
                         Spacer()
 
-                        // 右：トレイボタン（常に表示）
                         Button {
                             if selectedItem != nil {
                                 withAnimation(.spring()) {
@@ -309,6 +328,30 @@ struct ContentView: View {
                     .padding(.bottom, 36)
                     .zIndex(6)
 
+                    // ── 保存フィードバック ──
+                    if showSavedFeedback {
+                        ZStack {
+                            Capsule()
+                                .fill(Color.black.opacity(0.7))
+                                .frame(width: 140, height: 44)
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Text("保存しました")
+                                    .font(.subheadline.bold())
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .transition(
+                            .asymmetric(
+                                insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                removal: .scale(scale: 1.1).combined(with: .opacity)
+                            )
+                        )
+                        .padding(.bottom, 110)
+                        .zIndex(10)
+                    }
+
                     // ── ドラッグ中のフローティングアイテム ──
                     if let item = draggingItem {
                         TierItemView(item: item)
@@ -325,13 +368,18 @@ struct ContentView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // ── 左：戻るボタン（ホーム） ──
+
+                // ── 左：戻るボタン → 保存して閉じる ──
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        // 後ほど実装
+                        saveAndDismiss()
                     } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.body.bold())
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.body.bold())
+                            Text("ライブラリ")
+                                .font(.body)
+                        }
                     }
                 }
 
@@ -376,12 +424,12 @@ struct ContentView: View {
                     }
                 }
 
-                // ── 右：保存（プレビュー）＋ 設定 ──
+                // ── 右：保存 ＋ 設定 ──
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     Button {
-                        // 後ほど実装（保存・プレビュー）
+                        triggerSaveFeedback()
                     } label: {
-                        Image(systemName: "square.and.arrow.up")
+                        Image(systemName: "square.and.arrow.down")
                             .font(.body)
                     }
 
@@ -416,6 +464,38 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Actions
+
+    private func saveAndDismiss() {
+        let title = tierListTitle.trimmingCharacters(in: .whitespaces)
+        let data = vm.toSaveData(
+            id: saveId,
+            title: title.isEmpty ? "ティア表" : title,
+            createdAt: createdAt
+        )
+        onSave(data)
+        onDismiss()
+    }
+
+    private func triggerSaveFeedback() {
+        let title = tierListTitle.trimmingCharacters(in: .whitespaces)
+        let data = vm.toSaveData(
+            id: saveId,
+            title: title.isEmpty ? "ティア表" : title,
+            createdAt: createdAt
+        )
+        onSave(data)
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            showSavedFeedback = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation(.easeOut(duration: 0.25)) {
+                showSavedFeedback = false
+            }
+        }
+    }
+
     private func finishEditing() {
         if tierListTitle.trimmingCharacters(in: .whitespaces).isEmpty {
             tierListTitle = "ティア表"
@@ -436,5 +516,11 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    TierEditView(
+        vm: TierListViewModel(),
+        saveId: UUID(),
+        initialTitle: "プレビュー",
+        onSave: { _ in },
+        onDismiss: {}
+    )
 }

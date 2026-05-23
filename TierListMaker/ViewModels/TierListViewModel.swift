@@ -116,4 +116,26 @@ class TierListViewModel: ObservableObject {
     func poolIndex(for itemId: UUID) -> Int? {
         pool.firstIndex(where: { $0.id == itemId })
     }
+    
+    func toSaveData(id: UUID, title: String, createdAt: Date = Date()) -> TierListSaveData {
+            TierListSaveData(
+                id: id,
+                title: title,
+                rows: rows,
+                pool: pool,
+                defaultLabelSize: defaultLabelSize,
+                defaultLabelTextSize: defaultLabelTextSize,
+                defaultItemSize: defaultItemSize,
+                createdAt: createdAt,
+                updatedAt: Date()
+            )
+        }
+    
+    func load(from data: TierListSaveData) {
+            rows = data.rows
+            pool = data.pool
+            defaultLabelSize = data.defaultLabelSize
+            defaultLabelTextSize = data.defaultLabelTextSize
+            defaultItemSize = data.defaultItemSize
+        }
 }
