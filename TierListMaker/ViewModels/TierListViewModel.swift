@@ -84,26 +84,24 @@ class TierListViewModel: ObservableObject {
             for j in rows[i].items.indices { rows[i].items[j].textSize = size }
         }
     }
+    
+    // MARK: - アイテム解決
 
-    func moveItem(_ item: TierItem, toRowId rowId: UUID) {
-        // selectedItem は選択時点のコピーなので、IDで最新版を解決してから移動する
-        let current = pool.first(where: { $0.id == item.id })
+    /// item はタップ/ドラッグ開始時点のコピーのため、
+    /// IDで pool → rows の順に最新版を探して返す。
+    /// 見つからない場合は渡された item をそのまま返す（フォールバック）。
+    func resolveLatest(_ item: TierItem) -> TierItem {
+        pool.first(where: { $0.id == item.id })
             ?? rows.flatMap(\.items).first(where: { $0.id == item.id })
             ?? item
-        pool.removeAll { $0.id == item.id }
-        for i in rows.indices { rows[i].items.removeAll { $0.id == item.id } }
-        if let idx = rows.firstIndex(where: { $0.id == rowId }) {
-            rows[idx].items.append(current)
-        }
+    }
+
+    func moveItem(_ item: TierItem, toRowId rowId: UUID) {
+        let current = resolveLatest(item)
     }
 
     func returnToPool(_ item: TierItem) {
-        // 同様にIDで最新版を解決してからプールに戻す
-        let current = pool.first(where: { $0.id == item.id })
-            ?? rows.flatMap(\.items).first(where: { $0.id == item.id })
-            ?? item
-        for i in rows.indices { rows[i].items.removeAll { $0.id == item.id } }
-        if !pool.contains(where: { $0.id == item.id }) { pool.append(current) }
+        let current = resolveLatest(item)
     }
 
     func removeRow(id: UUID) {

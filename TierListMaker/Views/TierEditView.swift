@@ -64,36 +64,34 @@ struct TierEditView: View {
         self._tierListTitle = State(initialValue: initialTitle)
     }
 
-    // シート・モーダル
-    @State private var showAddItem = false
-    @State private var showPool = false
-    @State private var showTableEdit = false
-    @State private var showItemEdit = false
-    @State private var showAddHub = false
+    // MARK: - シート・モーダル
+
+    @State private var showAddItem    = false
+    @State private var showPool       = false
+    @State private var showTableEdit  = false
+    @State private var showItemEdit   = false
+    @State private var showAddHub     = false
     @State private var showSavedFeedback = false
 
-    // ── ドラッグ状態（2つの ObservableObject に分離） ──
-    //
-    // dragPos: dragLocation のみ（毎フレーム更新）
-    //   → TierEditView.body は dragPos を直接読まない。
-    //     DragGhostView が独立して購読するため、
-    //     dragLocation 変化で TierEditView 全体が再描画されない。
-    //
-    // dragSel: draggingItem / hoveredRowId / selectedItem（低頻度更新）
-    //   → TierEditView.body は selectedItem と draggingItem を読む（選択UI制御）。
-    //     これらはタップ・ドラッグ開始終了時のみ変化するため再描画頻度は低い。
+    // MARK: - タイトル編集
+    // ★ 旧: isEditingTitle / finishEditing() / onChange(of: title) がここにあった
+    // → TierEditToolbar に移譲。TierEditView が持つのは State と FocusState のみ。
+
+    @State private var isEditingTitle = false
+    @FocusState private var titleFocused: Bool
+    private let maxTitleLength = 10
+
+    // MARK: - ドラッグ状態
+
     @StateObject private var dragPos = DragPositionState()
     @StateObject private var dragSel = DragInteractionState()
 
-    // フレーム
+    // MARK: - フレーム
+
     @State private var rowFrames: [UUID: CGRect] = [:]
     @State private var trayFrame: CGRect = .zero
 
-    // タイトル編集
-    @State private var isEditingTitle = false
-    @FocusState private var titleFocused: Bool
-
-    private let maxTitleLength = 10
+    // MARK: - Body
 
     var body: some View {
         NavigationStack {
@@ -109,8 +107,8 @@ struct TierEditView: View {
                                         rowId: row.id,
                                         row: $row,
                                         vm: vm,
-                                        dragPos: dragPos,   // let 渡し（購読なし）
-                                        dragSel: dragSel,   // @ObservedObject 渡し
+                                        dragPos: dragPos,
+                                        dragSel: dragSel,
                                         rowFrames: rowFrames,
                                         trayFrame: trayFrame
                                     )
@@ -127,9 +125,7 @@ struct TierEditView: View {
                             }
                         }
                         .environment(\.colorScheme, vm.tierTheme.colorScheme)
-                        .onPreferenceChange(RowFramePreferenceKey.self) { frames in
-                            rowFrames = frames
-                        }
+                        .onPreferenceChange(RowFramePreferenceKey.self) { rowFrames = $0 }
                         .frame(height: scrollGeo.size.height - 100)
                         .mask(
                             VStack(spacing: 0) {
@@ -146,219 +142,78 @@ struct TierEditView: View {
                     .zIndex(0)
 
                     // ── ＋ハブ背景ディム ──
+                    // ★ 旧: Color.black.opacity(0.3) + onTapGesture がインラインにあった
+                    // → TierEditHubDim に切り出し
+
                     if showAddHub {
-                        Color.black.opacity(0.3)
-                            .ignoresSafeArea()
-                            .onTapGesture {
-                                withAnimation(.spring()) { showAddHub = false }
-                            }
-                            .zIndex(2)
+                        TierEditHubDim {
+                            withAnimation(.spring()) { showAddHub = false }
+                        }
+                        .zIndex(2)
                     }
 
                     // ── 待機状態：選択アイテム表示 ──
+                    // ★ 旧: HStack { Spacer() VStack { ... } Spacer() } がインラインにあった
+                    // → TierSelectedItemOverlay に切り出し
+
                     if let item = dragSel.selectedItem {
-                        HStack {
-                            Spacer()
-                            VStack(spacing: 6) {
-                                Text("配置先のティアをタップ")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Button {
-                                    showItemEdit = true
-                                } label: {
-                                    ZStack(alignment: .topTrailing) {
-                                        TierItemView(item: latestItem(for: item) ?? item)
-                                        Image(systemName: "pencil.circle.fill")
-                                            .foregroundColor(.blue)
-                                            .background(Color.white.clipShape(Circle()))
-                                            .font(.subheadline)
-                                            .offset(x: 4, y: -4)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                Text("タップして編集")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                        }
-                        .padding(.bottom, 36)
-                        .transition(.opacity.combined(with: .scale))
+                        TierSelectedItemOverlay(
+                            item: vm.resolveLatest(item),
+                            onEdit: { showItemEdit = true }
+                        )
                         .zIndex(4)
                     }
 
                     // ── ＋ハブのサブボタン ──
+                    // ★ 旧: HStack { VStack { Button × 2 } Spacer() } がインラインにあった
+                    // → TierEditHubMenu に切り出し
+
                     if showAddHub && dragSel.selectedItem == nil && dragSel.draggingItem == nil {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Button {
-                                    withAnimation(.spring()) { showAddHub = false }
-                                    showAddItem = true
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        Image(systemName: "photo.badge.plus")
-                                            .font(.title3.bold())
-                                            .frame(width: 50, height: 50)
-                                            .background(Color.blue)
-                                            .foregroundColor(.white)
-                                            .clipShape(Circle())
-                                            .shadow(radius: 4)
-                                        Text("アイテムを追加")
-                                            .font(.subheadline.bold())
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(Color.black.opacity(0.6))
-                                            .clipShape(Capsule())
-                                    }
-                                }
-
-                                Button {
-                                    withAnimation(.spring()) { showAddHub = false }
-                                    let isFull = vm.rows.count >= 8
-                                    if !isFull { vm.addRow() }
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        Image(systemName: "plus.rectangle")
-                                            .font(.title3.bold())
-                                            .frame(width: 50, height: 50)
-                                            .background(
-                                                vm.rows.count >= 8
-                                                    ? Color(.systemGray3)
-                                                    : Color.blue
-                                            )
-                                            .foregroundColor(.white)
-                                            .clipShape(Circle())
-                                            .shadow(radius: 4)
-                                        Text(vm.rows.count >= 8 ? "行は最大8行です" : "行を追加")
-                                            .font(.subheadline.bold())
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(Color.black.opacity(0.6))
-                                            .clipShape(Capsule())
-                                    }
-                                }
-                                .disabled(vm.rows.count >= 8)
+                        TierEditHubMenu(
+                            vm: vm,
+                            onAddItem: {
+                                withAnimation(.spring()) { showAddHub = false }
+                                showAddItem = true
+                            },
+                            onAddRow: {
+                                withAnimation(.spring()) { showAddHub = false }
+                                vm.addRow()
                             }
-                            .padding(.leading, 20)
-                            .padding(.bottom, 8)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-
-                            Spacer()
-                        }
-                        .padding(.bottom, 90)
+                        )
                         .zIndex(5)
                     }
 
                     // ── フローティングボタン ──
-                    HStack {
-                        if dragSel.selectedItem == nil && dragSel.draggingItem == nil && !showPool {
-                            Button {
-                                withAnimation(.spring()) { showAddHub.toggle() }
-                            } label: {
-                                Image(systemName: showAddHub ? "xmark" : "plus")
-                                    .font(.title2.bold())
-                                    .frame(width: 50, height: 50)
-                                    .background(showAddHub ? Color(.systemGray3) : Color.blue)
-                                    .foregroundColor(.white)
-                                    .clipShape(Circle())
-                                    .shadow(radius: 4)
-                                    .rotationEffect(.degrees(showAddHub ? 90 : 0))
-                                    .animation(.spring(), value: showAddHub)
+                    // ★ 旧: HStack { addHubButton ... trayButton } がインラインにあった
+                    // → TierEditFloatingButtons に切り出し
+
+                    TierEditFloatingButtons(
+                        vm: vm,
+                        dragSel: dragSel,
+                        showAddHub: $showAddHub,
+                        showPool: $showPool,
+                        onReturnToPool: {
+                            withAnimation(.spring()) {
+                                vm.returnToPool(dragSel.selectedItem!)
+                                dragSel.selectedItem = nil
                             }
-                            .padding(.leading, 20)
-                            .transition(.opacity.combined(with: .scale))
-                        } else {
-                            Color.clear
-                                .frame(width: 50, height: 50)
-                                .padding(.leading, 20)
-                        }
-
-                        Spacer()
-
-                        if !showPool {
-                            Button {
-                                if dragSel.selectedItem != nil {
-                                    withAnimation(.spring()) {
-                                        vm.returnToPool(dragSel.selectedItem!)
-                                        dragSel.selectedItem = nil
-                                    }
-                                } else {
-                                    withAnimation(.spring()) {
-                                        showAddHub = false
-                                        showPool.toggle()
-                                    }
-                                }
-                            } label: {
-                                ZStack(alignment: .topTrailing) {
-                                    Image(systemName: showPool ? "tray.fill" : "tray")
-                                        .font(.title2.bold())
-                                        .frame(width: 50, height: 50)
-                                        .background(
-                                            dragSel.selectedItem != nil || dragSel.draggingItem != nil
-                                                ? Color.orange
-                                                : showPool ? Color.orange : Color.blue
-                                        )
-                                        .foregroundColor(.white)
-                                        .clipShape(Circle())
-                                        .shadow(radius: 4)
-
-                                    if !vm.pool.isEmpty
-                                        && dragSel.selectedItem == nil
-                                        && dragSel.draggingItem == nil {
-                                        Text("\(vm.pool.count)")
-                                            .font(.caption2.bold())
-                                            .foregroundColor(.white)
-                                            .padding(4)
-                                            .background(Color.red)
-                                            .clipShape(Circle())
-                                            .offset(x: 4, y: -4)
-                                    }
-                                }
-                            }
-                            .padding(.trailing, 20)
-                            .background(
-                                GeometryReader { trayGeo in
-                                    Color.clear
-                                        .onAppear { trayFrame = trayGeo.frame(in: .global) }
-                                        .onChange(of: trayGeo.frame(in: .global)) { newFrame in
-                                            trayFrame = newFrame
-                                        }
-                                }
-                            )
-                        }
-                    }
-                    .padding(.bottom, 36)
+                        },
+                        trayFrameChanged: { trayFrame = $0 }
+                    )
                     .zIndex(6)
 
                     // ── 保存フィードバック ──
+                    // ★ 旧: ZStack { Capsule ... HStack { checkmark ... } } がインラインにあった
+                    // → TierSavedFeedback に切り出し
+
                     if showSavedFeedback {
-                        ZStack {
-                            Capsule()
-                                .fill(Color.black.opacity(0.7))
-                                .frame(width: 140, height: 44)
-                            HStack(spacing: 8) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                Text("保存しました")
-                                    .font(.subheadline.bold())
-                                    .foregroundColor(.white)
-                            }
-                        }
-                        .transition(
-                            .asymmetric(
-                                insertion: .scale(scale: 0.8).combined(with: .opacity),
-                                removal: .scale(scale: 1.1).combined(with: .opacity)
-                            )
-                        )
-                        .padding(.bottom, 110)
-                        .zIndex(10)
+                        TierSavedFeedback()
+                            .padding(.bottom, 110)
+                            .zIndex(10)
                     }
 
-                    // ── ドラッグ中のフローティング Ghost ──
-                    // DragGhostView が dragPos を独立して購読するため、
-                    // dragLocation 変化でこのbody全体が再描画されない。
+                    // ── ドラッグ Ghost ──
+
                     DragGhostView(
                         dragPos: dragPos,
                         dragSel: dragSel,
@@ -370,69 +225,18 @@ struct TierEditView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // ★ 旧: ToolbarItem × 4 がインラインにあった
+                // → TierEditToolbar に切り出し
 
-                // ── 左：戻るボタン ──
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        saveAndDismiss()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left").font(.body.bold())
-                            Text("ライブラリ").font(.body)
-                        }
-                    }
-                }
-
-                // ── 中央：タイトル ──
-                ToolbarItem(placement: .principal) {
-                    if isEditingTitle {
-                        HStack(spacing: 4) {
-                            TextField("", text: $tierListTitle)
-                                .font(.headline)
-                                .multilineTextAlignment(.center)
-                                .focused($titleFocused)
-                                .submitLabel(.done)
-                                .autocorrectionDisabled(true)
-                                .textInputAutocapitalization(.never)
-                                .onSubmit { finishEditing() }
-                                .onChange(of: tierListTitle) { newValue in
-                                    if newValue.count > maxTitleLength {
-                                        tierListTitle = String(newValue.prefix(maxTitleLength))
-                                    }
-                                }
-                                .frame(maxWidth: 160)
-                            Button { finishEditing() } label: {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.blue)
-                                    .font(.title3)
-                            }
-                        }
-                    } else {
-                        HStack(spacing: 6) {
-                            Text(tierListTitle.isEmpty ? "ティア表" : tierListTitle)
-                                .font(.headline)
-                                .lineLimit(1)
-                            Button {
-                                isEditingTitle = true
-                                titleFocused = true
-                            } label: {
-                                Image(systemName: "pencil")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                }
-
-                // ── 右：保存 ＋ 設定 ──
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    Button { triggerSaveFeedback() } label: {
-                        Image(systemName: "square.and.arrow.down").font(.body)
-                    }
-                    Button { showTableEdit = true } label: {
-                        Image(systemName: "gearshape").font(.body)
-                    }
-                }
+                TierEditToolbar(
+                    title: $tierListTitle,
+                    isEditing: $isEditingTitle,
+                    focused: $titleFocused,
+                    maxLength: maxTitleLength,
+                    onBack:     { saveAndDismiss() },
+                    onSave:     { triggerSaveFeedback() },
+                    onSettings: { showTableEdit = true }
+                )
             }
             .environment(\.tierTheme, vm.tierTheme)
             .sheet(isPresented: $showAddItem) {
@@ -440,7 +244,7 @@ struct TierEditView: View {
             }
             .sheet(isPresented: $showItemEdit, onDismiss: {
                 if let item = dragSel.selectedItem {
-                    dragSel.selectedItem = latestItem(for: item)
+                    dragSel.selectedItem = vm.resolveLatest(item)
                 }
             }) {
                 if let item = dragSel.selectedItem {
@@ -469,10 +273,9 @@ struct TierEditView: View {
             if showPool {
                 ItemPoolView(
                     vm: vm,
-                    showAddItem: $showAddItem,
                     showPool: $showPool,
-                    dragPos: dragPos,   // let 渡し（購読なし）
-                    dragSel: dragSel,   // let 渡し（購読なし、子に委ねる）
+                    dragPos: dragPos,
+                    dragSel: dragSel,
                     rowFrames: rowFrames,
                     trayFrame: trayFrame
                 )
@@ -487,10 +290,9 @@ struct TierEditView: View {
     // MARK: - Actions
 
     private func saveAndDismiss() {
-        let title = tierListTitle.trimmingCharacters(in: .whitespaces)
         let data = vm.toSaveData(
             id: saveId,
-            title: title.isEmpty ? "ティア表" : title,
+            title: normalizedTitle,
             createdAt: createdAt
         )
         onSave(data)
@@ -498,10 +300,9 @@ struct TierEditView: View {
     }
 
     private func triggerSaveFeedback() {
-        let title = tierListTitle.trimmingCharacters(in: .whitespaces)
         let data = vm.toSaveData(
             id: saveId,
-            title: title.isEmpty ? "ティア表" : title,
+            title: normalizedTitle,
             createdAt: createdAt
         )
         onSave(data)
@@ -513,24 +314,16 @@ struct TierEditView: View {
         }
     }
 
-    private func finishEditing() {
-        if tierListTitle.trimmingCharacters(in: .whitespaces).isEmpty {
-            tierListTitle = "ティア表"
-        }
-        isEditingTitle = false
-        titleFocused = false
-    }
+    // MARK: - Helpers
 
-    private func latestItem(for item: TierItem) -> TierItem? {
-        if let poolIdx = vm.poolIndex(for: item.id) {
-            return vm.pool[poolIdx]
-        } else if let rowIdx = vm.rowIndex(for: item.id),
-                  let itemIdx = vm.itemIndex(for: item.id, in: rowIdx) {
-            return vm.rows[rowIdx].items[itemIdx]
-        }
-        return nil
+    /// 空白のみのタイトルをデフォルト文字列に正規化する
+    private var normalizedTitle: String {
+        let t = tierListTitle.trimmingCharacters(in: .whitespaces)
+        return t.isEmpty ? "ティア表" : t
     }
 }
+
+// MARK: - Preview
 
 #Preview {
     TierEditView(

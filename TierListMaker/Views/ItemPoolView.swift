@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ItemPoolView: View {
     @ObservedObject var vm: TierListViewModel
-    @Binding var showAddItem: Bool
     @Binding var showPool: Bool
 
     // ItemPoolView 自身は dragPos/dragSel の値を描画に使わない。

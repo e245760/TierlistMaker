@@ -1,6 +1,20 @@
 import SwiftUI
 internal import UniformTypeIdentifiers
 
+// MARK: - PreferenceKey
+//
+// GeometryReader が計算した行の高さを親ビューへ伝えるためのキー。
+// preference(key:value:) → onPreferenceChange の流れを使うことで、
+// レイアウトパス中に @State を直接書き換える onChange/onAppear パターンの
+// ループリスクを回避する。
+
+private struct RowContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 70
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct TierRowView: View {
 
     let rowId: UUID
@@ -31,9 +45,11 @@ struct TierRowView: View {
     private var textColor:  Color { Color(hex: row.textColorHex) }
 
     // MARK: - 高さ状態
-    // GeometryReader の正確な幅から計算した高さを保持する。
-    // これにより UIScreen.main.bounds.width を使う itemAreaHeight が不要になり、
-    // 重複計算が解消される。
+    //
+    // GeometryReader 内の LazyVGrid が確定した高さを
+    // RowContentHeightKey 経由で受け取り保持する。
+    // onPreferenceChange はレイアウト完了後に発火するため、
+    // レイアウトパス中の @State 書き換えによるループリスクがない。
     @State private var computedHeight: CGFloat = 70
 
     var body: some View {
@@ -82,13 +98,13 @@ struct TierRowView: View {
                         height: calculatedHeight,
                         alignment: .leading
                     )
-                    // GeometryReader が確定した高さを @State に書き戻す。
-                    // 外側の .frame(minHeight:) がこれを使うため、
-                    // UIScreen.main.bounds.width による近似計算が不要になる。
-                    .onChange(of: calculatedHeight) { computedHeight = $0 }
-                    .onAppear { computedHeight = calculatedHeight }
+                    // calculatedHeight を PreferenceKey 経由で外側に伝える。
+                    // レイアウトパス中の @State 直接書き換えを避けるための正規手順。
+                    .preference(key: RowContentHeightKey.self, value: calculatedHeight)
                 }
                 .frame(minHeight: computedHeight)
+                // レイアウト完了後に発火するため onChange/onAppear よりループリスクが低い。
+                .onPreferenceChange(RowContentHeightKey.self) { computedHeight = $0 }
                 .background(
                     isHovered ? Color.blue.opacity(0.15) : tierTheme.rowBackground
                 )
