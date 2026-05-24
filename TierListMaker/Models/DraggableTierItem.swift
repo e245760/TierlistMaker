@@ -13,10 +13,12 @@ struct DraggableTierItem: View {
 
     var trayFrame: CGRect
 
-    @State private var pressStartTime: Date? = nil
+    // Task を保持することでキャンセルが可能になる。
+    // Date によるタイムスタンプ比較が不要になりコードもシンプルになる。
+    @State private var longPressTask: Task<Void, Never>? = nil
     @State private var isDragging = false
 
-    private let longPressDuration = 0.4
+    private let longPressDuration: UInt64 = 400_000_000  // 0.4秒（ナノ秒）
 
     var isDraggingThis: Bool { dragSel.draggingItem?.id == item.id }
 
@@ -28,15 +30,20 @@ struct DraggableTierItem: View {
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .global)
                     .onChanged { value in
-                        if pressStartTime == nil {
-                            let startTime = Date()
-                            pressStartTime = startTime
-
-                            DispatchQueue.main.asyncAfter(deadline: .now() + longPressDuration) {
-                                guard self.pressStartTime == startTime, !self.isDragging else { return }
-                                self.isDragging = true
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                withAnimation(.spring()) { self.dragSel.draggingItem = self.item }
+                        // タスクがなければ新規作成（指が触れた瞬間に1回だけ）
+                        if longPressTask == nil {
+                            longPressTask = Task { @MainActor in
+                                do {
+                                    try await Task.sleep(nanoseconds: longPressDuration)
+                                    // sleep が正常完了 = キャンセルなし = ロングプレス成立
+                                    guard !isDragging else { return }
+                                    isDragging = true
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    withAnimation(.spring()) { dragSel.draggingItem = item }
+                                } catch {
+                                    // Task.CancellationError: 指が離れた or ビューが消えた
+                                    // → 何もしない（正常なキャンセル）
+                                }
                             }
                         }
 
@@ -52,7 +59,9 @@ struct DraggableTierItem: View {
                         }
                     }
                     .onEnded { value in
-                        pressStartTime = nil
+                        // タスクをキャンセルして破棄
+                        longPressTask?.cancel()
+                        longPressTask = nil
 
                         if isDragging {
                             if trayFrame.contains(value.location) {
@@ -73,5 +82,10 @@ struct DraggableTierItem: View {
                         }
                     }
             )
+            .onDisappear {
+                // ビューが消えた時も確実にキャンセル
+                longPressTask?.cancel()
+                longPressTask = nil
+            }
     }
 }

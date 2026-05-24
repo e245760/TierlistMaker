@@ -7,11 +7,7 @@ struct TierRowView: View {
     @Binding var row: TierRow
     @ObservedObject var vm: TierListViewModel
 
-    // let で受け取る → @ObservedObject でないため dragLocation 変化で再描画しない。
-    // 子の DraggableTierItem に参照を渡すだけ。
     let dragPos: DragPositionState
-
-    // hoveredRowId・selectedItem を読むため購読が必要
     @ObservedObject var dragSel: DragInteractionState
 
     let rowFrames: [UUID: CGRect]
@@ -27,6 +23,18 @@ struct TierRowView: View {
     private var effectiveLabelSize: LabelSize { vm.defaultLabelSize }
     private var effectiveTextSize: LabelTextSize { vm.defaultLabelTextSize }
     private var effectiveItemSize: ItemSize { vm.defaultItemSize }
+
+    // MARK: - Color キャッシュ
+    // body 内で同じ Color(hex:) を何度も呼ぶ代わりに1回だけ生成して使い回す。
+    // row が変化すると body が再描画されるため、値は常に最新になる。
+    private var labelColor: Color { Color(hex: row.color) }
+    private var textColor:  Color { Color(hex: row.textColorHex) }
+
+    // MARK: - 高さ状態
+    // GeometryReader の正確な幅から計算した高さを保持する。
+    // これにより UIScreen.main.bounds.width を使う itemAreaHeight が不要になり、
+    // 重複計算が解消される。
+    @State private var computedHeight: CGFloat = 70
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -74,8 +82,13 @@ struct TierRowView: View {
                         height: calculatedHeight,
                         alignment: .leading
                     )
+                    // GeometryReader が確定した高さを @State に書き戻す。
+                    // 外側の .frame(minHeight:) がこれを使うため、
+                    // UIScreen.main.bounds.width による近似計算が不要になる。
+                    .onChange(of: calculatedHeight) { computedHeight = $0 }
+                    .onAppear { computedHeight = calculatedHeight }
                 }
-                .frame(minHeight: itemAreaHeight)
+                .frame(minHeight: computedHeight)
                 .background(
                     isHovered ? Color.blue.opacity(0.15) : tierTheme.rowBackground
                 )
@@ -83,7 +96,6 @@ struct TierRowView: View {
                 .onDrop(of: [.text], isTargeted: nil) { _ in false }
             }
 
-            // 行全体タップ配置（selectedItem がある時だけ表示）
             if dragSel.selectedItem != nil {
                 Color.clear
                     .contentShape(Rectangle())
@@ -126,8 +138,8 @@ struct TierRowView: View {
             .lineLimit(1)
             .frame(width: effectiveLabelSize.width)
             .frame(maxHeight: .infinity)
-            .background(Color(hex: row.color))
-            .foregroundColor(Color(hex: row.textColorHex))
+            .background(labelColor)   // ← キャッシュ済み
+            .foregroundColor(textColor)
             .onTapGesture(count: 2) { showEditSheet = true }
             .contextMenu {
                 Button { showEditSheet = true } label: {
@@ -151,8 +163,8 @@ struct TierRowView: View {
                 .lineLimit(1)
                 .frame(width: effectiveLabelSize.width)
                 .frame(maxHeight: .infinity)
-                .background(Color(hex: row.color))
-                .foregroundColor(Color(hex: row.textColorHex))
+                .background(labelColor)   // ← キャッシュ済み
+                .foregroundColor(textColor)
             LazyHStack(spacing: 4) {
                 ForEach(row.items) { item in
                     TierItemView(item: item)
@@ -163,21 +175,5 @@ struct TierRowView: View {
             .background(tierTheme.rowBackground)
         }
         .frame(width: UIScreen.main.bounds.width, height: 70)
-    }
-
-    // MARK: - 高さ計算
-
-    private var itemAreaHeight: CGFloat {
-        guard !row.items.isEmpty else { return 70 }
-        let labelW = effectiveLabelSize.width
-        let totalW = UIScreen.main.bounds.width - labelW - 8
-        let itemW = effectiveItemSize.width + 4
-        let cols = max(1, Int(totalW / itemW))
-        let rowCount = max(
-            1,
-            Int(ceil(Double(row.items.count) / Double(cols)))
-        )
-        let itemH = effectiveItemSize.height + 4
-        return max(70, CGFloat(rowCount) * itemH + 8)
     }
 }

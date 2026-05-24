@@ -97,13 +97,29 @@ struct LibraryView: View {
 struct TierListCard: View {
     let saveData: TierListSaveData
 
+    // MARK: - Color 事前計算
+    //
+    // GeometryReader + ForEach の中で Color(hex:) を呼ぶと、
+    // スクロールや再描画のたびに全行・全アイテム分の変換が走る。
+    // saveData（let）を元に body の外で一度だけ計算しておく。
+    private struct RowColors {
+        let label: Color
+        let items: [Color]
+    }
+    private var previewRowColors: [RowColors] {
+        saveData.rows.prefix(6).map { row in
+            RowColors(
+                label: Color(hex: row.color),
+                items: row.items.prefix(8).map { Color(hex: $0.backgroundColorHex) }
+            )
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 色帯プレビュー
             tierPreview
                 .frame(height: 110)
 
-            // 情報
             VStack(alignment: .leading, spacing: 4) {
                 Text(saveData.title)
                     .font(.subheadline.bold())
@@ -136,25 +152,25 @@ struct TierListCard: View {
 
     // ティア行の色帯（ラベル色 + アイテムエリア）
     private var tierPreview: some View {
-        GeometryReader { geo in
-            let displayRows = Array(saveData.rows.prefix(6))
-            let count = max(1, displayRows.count)
+        // previewRowColors を body の前に計算済みのため、
+        // GeometryReader 内では Color(hex:) を呼ばずに済む。
+        let rowColors = previewRowColors
+        return GeometryReader { geo in
+            let count = max(1, rowColors.count)
             let gap: CGFloat = 1
             let rowH = (geo.size.height - gap * CGFloat(count - 1)) / CGFloat(count)
 
             VStack(spacing: gap) {
-                ForEach(Array(displayRows.enumerated()), id: \.offset) { _, row in
+                ForEach(Array(rowColors.enumerated()), id: \.offset) { index, rc in
                     HStack(spacing: gap) {
-                        Color(hex: row.color)
+                        rc.label
                             .frame(width: 22)
-                        // アイテムがある場合は小さく表示
-                        if row.items.isEmpty {
+                        if rc.items.isEmpty {
                             Color(.systemGray5)
                         } else {
                             HStack(spacing: 2) {
-                                ForEach(row.items.prefix(8)) { item in
-                                    Color(hex: item.backgroundColorHex)
-                                        .clipShape(RoundedRectangle(cornerRadius: 2))
+                                ForEach(Array(rc.items.enumerated()), id: \.offset) { _, color in
+                                    color.clipShape(RoundedRectangle(cornerRadius: 2))
                                 }
                                 Spacer(minLength: 0)
                             }
