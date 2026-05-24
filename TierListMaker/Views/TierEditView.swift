@@ -10,6 +10,135 @@ struct RowFramePreferenceKey: PreferenceKey {
     }
 }
 
+// MARK: - TierRowListView
+//
+// ティア行の一覧を縦スクロールで表示するビュー。
+// GeometryReader で利用可能な高さを測り、下端フェードマスクをかける。
+// 各行のグローバルフレームは RowFramePreferenceKey 経由で
+// onRowFramesChanged コールバックにより親（TierEditView）へ通知する。
+//
+// dragPos / dragSel は自身の再描画に使わず TierRowView へ渡すだけなので let で保持する。
+// TierRowView 側が @ObservedObject で購読するため、ここでの購読は不要。
+
+private struct TierRowListView: View {
+    @ObservedObject var vm: TierListViewModel
+    let dragPos: DragPositionState
+    let dragSel: DragInteractionState
+    let rowFrames: [UUID: CGRect]
+    let trayFrame: CGRect
+    let onRowFramesChanged: ([UUID: CGRect]) -> Void
+
+    var body: some View {
+        GeometryReader { scrollGeo in
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach($vm.rows) { $row in
+                        TierRowView(
+                            rowId: row.id,
+                            row: $row,
+                            vm: vm,
+                            dragPos: dragPos,
+                            dragSel: dragSel,
+                            rowFrames: rowFrames,
+                            trayFrame: trayFrame
+                        )
+                        .background(
+                            GeometryReader { rowGeo in
+                                Color.clear.preference(
+                                    key: RowFramePreferenceKey.self,
+                                    value: [row.id: rowGeo.frame(in: .global)]
+                                )
+                            }
+                        )
+                    }
+                    Color.clear.frame(height: 20)
+                }
+            }
+            .environment(\.colorScheme, vm.tierTheme.colorScheme)
+            .onPreferenceChange(RowFramePreferenceKey.self, perform: onRowFramesChanged)
+            .frame(height: scrollGeo.size.height - 100)
+            .mask(
+                VStack(spacing: 0) {
+                    Rectangle()
+                    LinearGradient(
+                        colors: [.black, .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 40)
+                }
+            )
+        }
+    }
+}
+
+// MARK: - ItemPoolOverlay
+//
+// プールパネル（ItemPoolView）とその背景ディムを画面下部に重ねる ViewModifier。
+// showPool が true のとき:
+//   - 全面に半透明ディムを表示し、タップで閉じる
+//   - 画面下端から ItemPoolView をスライドイン
+//
+// dragPos / dragSel は参照型なので let で渡しても ItemPoolView 内で正しく動作する。
+
+private struct ItemPoolOverlay: ViewModifier {
+    let vm: TierListViewModel
+    @Binding var showPool: Bool
+    let dragPos: DragPositionState
+    let dragSel: DragInteractionState
+    let rowFrames: [UUID: CGRect]
+    let trayFrame: CGRect
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                if showPool {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.easeOut(duration: 0.22)) { showPool = false }
+                        }
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if showPool {
+                    ItemPoolView(
+                        vm: vm,
+                        showPool: $showPool,
+                        dragPos: dragPos,
+                        dragSel: dragSel,
+                        rowFrames: rowFrames,
+                        trayFrame: trayFrame
+                    )
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom),
+                        removal: .offset(y: 500)
+                    ))
+                }
+            }
+    }
+}
+
+private extension View {
+    func itemPoolOverlay(
+        vm: TierListViewModel,
+        showPool: Binding<Bool>,
+        dragPos: DragPositionState,
+        dragSel: DragInteractionState,
+        rowFrames: [UUID: CGRect],
+        trayFrame: CGRect
+    ) -> some View {
+        modifier(ItemPoolOverlay(
+            vm: vm,
+            showPool: showPool,
+            dragPos: dragPos,
+            dragSel: dragSel,
+            rowFrames: rowFrames,
+            trayFrame: trayFrame
+        ))
+    }
+}
+
 // MARK: - ドラッグ Ghost View
 //
 // dragPos（毎フレーム）と dragSel（ドラッグ開始/終了）を購読する。
@@ -99,46 +228,15 @@ struct TierEditView: View {
                 ZStack(alignment: .bottom) {
 
                     // ── メインコンテンツ ──
-                    GeometryReader { scrollGeo in
-                        ScrollView {
-                            VStack(spacing: 0) {
-                                ForEach($vm.rows) { $row in
-                                    TierRowView(
-                                        rowId: row.id,
-                                        row: $row,
-                                        vm: vm,
-                                        dragPos: dragPos,
-                                        dragSel: dragSel,
-                                        rowFrames: rowFrames,
-                                        trayFrame: trayFrame
-                                    )
-                                    .background(
-                                        GeometryReader { rowGeo in
-                                            Color.clear.preference(
-                                                key: RowFramePreferenceKey.self,
-                                                value: [row.id: rowGeo.frame(in: .global)]
-                                            )
-                                        }
-                                    )
-                                }
-                                Color.clear.frame(height: 20)
-                            }
-                        }
-                        .environment(\.colorScheme, vm.tierTheme.colorScheme)
-                        .onPreferenceChange(RowFramePreferenceKey.self) { rowFrames = $0 }
-                        .frame(height: scrollGeo.size.height - 100)
-                        .mask(
-                            VStack(spacing: 0) {
-                                Rectangle()
-                                LinearGradient(
-                                    colors: [.black, .clear],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                                .frame(height: 40)
-                            }
-                        )
-                    }
+
+                    TierRowListView(
+                        vm: vm,
+                        dragPos: dragPos,
+                        dragSel: dragSel,
+                        rowFrames: rowFrames,
+                        trayFrame: trayFrame,
+                        onRowFramesChanged: { rowFrames = $0 }
+                    )
                     .zIndex(0)
 
                     // ── ＋ハブ背景ディム ──
@@ -260,31 +358,14 @@ struct TierEditView: View {
                 TableEditSheet(vm: vm)
             }
         }
-        .overlay {
-            if showPool {
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation(.easeOut(duration: 0.22)) { showPool = false }
-                    }
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if showPool {
-                ItemPoolView(
-                    vm: vm,
-                    showPool: $showPool,
-                    dragPos: dragPos,
-                    dragSel: dragSel,
-                    rowFrames: rowFrames,
-                    trayFrame: trayFrame
-                )
-                .transition(.asymmetric(
-                    insertion: .move(edge: .bottom),
-                    removal: .offset(y: 500)
-                ))
-            }
-        }
+        .itemPoolOverlay(
+            vm: vm,
+            showPool: $showPool,
+            dragPos: dragPos,
+            dragSel: dragSel,
+            rowFrames: rowFrames,
+            trayFrame: trayFrame
+        )
     }
 
     // MARK: - Actions

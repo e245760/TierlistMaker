@@ -98,10 +98,40 @@ class TierListViewModel: ObservableObject {
 
     func moveItem(_ item: TierItem, toRowId rowId: UUID) {
         let current = resolveLatest(item)
+
+        // pool にある場合
+        if let poolIdx = poolIndex(for: current.id) {
+            pool.remove(at: poolIdx)
+            if let rowIdx = rows.firstIndex(where: { $0.id == rowId }) {
+                rows[rowIdx].items.append(current)
+            }
+            return
+        }
+
+        // 別の行にある場合
+        if let srcRowIdx = rowIndex(for: current.id),
+            let itemIdx   = itemIndex(for: current.id, in: srcRowIdx) {
+            // 移動元と移動先が同じ行なら何もしない
+            guard rows[srcRowIdx].id != rowId else { return }
+            rows[srcRowIdx].items.remove(at: itemIdx)
+            if let dstRowIdx = rows.firstIndex(where: { $0.id == rowId }) {
+                rows[dstRowIdx].items.append(current)
+            }
+        }
     }
 
     func returnToPool(_ item: TierItem) {
         let current = resolveLatest(item)
+
+        // 既に pool にある場合は何もしない
+        guard poolIndex(for: current.id) == nil else { return }
+
+        // 行から取り出して pool へ
+        if let rowIdx  = rowIndex(for: current.id),
+            let itemIdx = itemIndex(for: current.id, in: rowIdx) {
+            rows[rowIdx].items.remove(at: itemIdx)
+            pool.append(current)
+        }
     }
 
     func removeRow(id: UUID) {
