@@ -31,7 +31,7 @@ struct TierItemView: View {
         }
         .frame(width: item.itemSize.width, height: item.itemSize.height)
         .background(backgroundColor)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .clipShape(itemClipShape)
     }
 
     // MARK: - 背景色
@@ -97,6 +97,14 @@ struct TierItemView: View {
             x: max(0, maxPxX / fW),
             y: max(0, maxPxY / fH)
         )
+    }
+    
+    // MARK: - クリップ形状
+
+    private var itemClipShape: AnyShape {
+        item.itemSize == .circle
+            ? AnyShape(Circle())
+            : AnyShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 

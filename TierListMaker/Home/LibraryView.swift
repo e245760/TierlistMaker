@@ -23,13 +23,20 @@ struct LibraryView: View {
                             ForEach(store.savedLists) { saveData in
                                 TierListCard(saveData: saveData)
                                     .onTapGesture { onOpen(saveData) }
-                                    .contextMenu {
-                                        Button(role: .destructive) {
+                                    .overlay(alignment: .topTrailing) {
+                                        Button {
                                             deletingId = saveData.id
                                             showDeleteAlert = true
                                         } label: {
-                                            Label("削除", systemImage: "trash")
+                                            Image(systemName: "trash.fill")
+                                                .font(.caption.bold())
+                                                .foregroundColor(.white)
+                                                .padding(6)
+                                                .background(Color.red.opacity(0.85))
+                                                .clipShape(Circle())
+                                                .padding(6)
                                         }
+                                        .buttonStyle(.plain)
                                     }
                             }
                         }

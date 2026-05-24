@@ -5,12 +5,14 @@ enum ItemSize: String, CaseIterable, Codable {
     case narrow = "narrow"
     case square = "square"
     case wide   = "wide"
+    case circle = "circle"
 
     var width: CGFloat {
         switch self {
         case .narrow: return 50
         case .square: return 65
         case .wide:   return 100
+        case .circle: return 65
         }
     }
 
@@ -21,6 +23,7 @@ enum ItemSize: String, CaseIterable, Codable {
         case .narrow: return "縦長"
         case .square: return "正方形"
         case .wide:   return "横長"
+        case .circle: return "円形"
         }
     }
 
@@ -29,6 +32,7 @@ enum ItemSize: String, CaseIterable, Codable {
         case .narrow: return "rectangle.portrait"
         case .square: return "square"
         case .wide:   return "rectangle"
+        case .circle: return "circle"
         }
     }
 }
