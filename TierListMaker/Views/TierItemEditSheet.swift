@@ -4,7 +4,7 @@ struct TierItemEditSheet: View {
     @Binding var item: TierItem
     @Environment(\.dismiss) var dismiss
 
-    var isImageItem: Bool { item.imageData != nil }
+    var isImageItem: Bool { item.imageFileName != nil }
 
     var body: some View {
         if isImageItem {
@@ -51,7 +51,7 @@ struct TextItemEditSheet: View {
         TierItem(
             id: item.id,
             label: editedLabel,
-            imageData: nil,
+            imageFileName: nil,
             itemSize: item.itemSize,
             textSize: item.textSize,
             textColorHex: editedTextColor.toHex(),
@@ -171,23 +171,33 @@ struct ImageItemEditSheet: View {
     @State private var editedCropContain: Bool
     @State private var editedCropTransparentBg: Bool
 
+    // FileManager から読み込んだ画像をキャッシュ
+    // （シート表示中に何度も load() を呼ばないようにする）
+    private let cachedImage: UIImage?
+
     init(item: Binding<TierItem>, dismissSheet: (() -> Void)? = nil) {
         self._item = item
         self.dismissSheet = dismissSheet
-        self._editedFlipH           = State(initialValue: item.wrappedValue.isFlippedHorizontal)
-        self._editedFlipV           = State(initialValue: item.wrappedValue.isFlippedVertical)
-        self._editedCropOffsetX     = State(initialValue: item.wrappedValue.cropOffsetX)
-        self._editedCropOffsetY     = State(initialValue: item.wrappedValue.cropOffsetY)
-        self._editedCropScale       = State(initialValue: item.wrappedValue.cropScale)
-        self._editedCropContain     = State(initialValue: item.wrappedValue.cropContain)
+        self._editedFlipH             = State(initialValue: item.wrappedValue.isFlippedHorizontal)
+        self._editedFlipV             = State(initialValue: item.wrappedValue.isFlippedVertical)
+        self._editedCropOffsetX       = State(initialValue: item.wrappedValue.cropOffsetX)
+        self._editedCropOffsetY       = State(initialValue: item.wrappedValue.cropOffsetY)
+        self._editedCropScale         = State(initialValue: item.wrappedValue.cropScale)
+        self._editedCropContain       = State(initialValue: item.wrappedValue.cropContain)
         self._editedCropTransparentBg = State(initialValue: item.wrappedValue.cropTransparentBg)
+
+        if let name = item.wrappedValue.imageFileName {
+            cachedImage = ImageFileStore.shared.load(fileName: name)
+        } else {
+            cachedImage = nil
+        }
     }
 
     var previewItem: TierItem {
         TierItem(
             id: item.id,
             label: item.label,
-            imageData: item.imageData,
+            imageFileName: item.imageFileName,
             itemSize: item.itemSize,
             isFlippedHorizontal: editedFlipH,
             isFlippedVertical: editedFlipV,
@@ -244,7 +254,7 @@ struct ImageItemEditSheet: View {
                                 scale: $editedCropScale,
                                 cropContain: $editedCropContain,
                                 cropTransparentBg: $editedCropTransparentBg,
-                                imageData: item.imageData,
+                                cachedImage: cachedImage,
                                 itemSize: item.itemSize,
                                 // クロップ完了時：編集値を item に書き戻してからシートを閉じる。
                                 // ImageItemEditSheet の完了ボタンを経由しないため、

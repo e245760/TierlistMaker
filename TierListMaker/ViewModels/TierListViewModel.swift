@@ -19,10 +19,25 @@ class TierListViewModel: ObservableObject {
     @Published var defaultItemTextSize: ItemTextSize = .medium
     @Published var tierTheme: TierTheme = .classic
 
+    // MARK: - アイテム追加
+    //
+    // imageData が渡された場合は ImageFileStore に保存し、
+    // TierItem にはファイル名のみを持たせる。
+
     func addItem(label: String, imageData: Data? = nil) {
+        let itemId = UUID()
+        var imageFileName: String? = nil
+
+        if let data = imageData {
+            let name = ImageFileStore.shared.fileName(for: itemId)
+            ImageFileStore.shared.save(data, fileName: name)
+            imageFileName = name
+        }
+
         let item = TierItem(
+            id: itemId,
             label: label,
-            imageData: imageData,
+            imageFileName: imageFileName,
             itemSize: defaultItemSize,
             textSize: defaultItemTextSize
         )

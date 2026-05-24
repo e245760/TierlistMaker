@@ -5,7 +5,8 @@ struct TierItemView: View {
 
     var body: some View {
         Group {
-            if let data = item.imageData, let uiImage = UIImage(data: data) {
+            if let fileName = item.imageFileName,
+               let uiImage = ImageFileStore.shared.load(fileName: fileName) {
                 let (ox, oy, sc) = resolvedCrop(for: uiImage)
                 Image(uiImage: uiImage)
                     .resizable()
@@ -98,7 +99,7 @@ struct TierItemView: View {
             y: max(0, maxPxY / fH)
         )
     }
-    
+
     // MARK: - クリップ形状
 
     private var itemClipShape: AnyShape {

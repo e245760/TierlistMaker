@@ -5,7 +5,7 @@ import SwiftUI
 /// ImageItemEditSheet の NavigationStack 内に NavigationLink でプッシュして使う。
 struct ImageCropEditView: View {
 
-    // MARK: - Bindings（公開APIは変更なし）
+    // MARK: - Bindings
 
     @Binding var offsetX: CGFloat
     @Binding var offsetY: CGFloat
@@ -13,7 +13,9 @@ struct ImageCropEditView: View {
     @Binding var cropContain: Bool
     @Binding var cropTransparentBg: Bool
 
-    let imageData: Data?
+    // imageData の代わりに、呼び出し元で load 済みの UIImage を受け取る。
+    // シート表示中にファイルを何度も読みに行かないための最適化。
+    let cachedImage: UIImage?
     let itemSize: ItemSize
 
     /// 完了タップ時にシート全体を閉じるクロージャ。
@@ -169,8 +171,8 @@ struct ImageCropEditView: View {
             initialScale             = scale
             initialCropContain       = cropContain
             initialCropTransparentBg = cropTransparentBg
-            // 画像のアスペクト比を計算
-            if let data = imageData, let img = UIImage(data: data), img.size.height > 0 {
+            // cachedImage からアスペクト比を計算（ファイルを読み直さない）
+            if let img = cachedImage, img.size.height > 0 {
                 imageAspect = img.size.width / img.size.height
             }
         }
@@ -191,8 +193,8 @@ struct ImageCropEditView: View {
                 Color(hex: "#AAAAAA")
             }
 
-            // 画像
-            if let data = imageData, let uiImage = UIImage(data: data) {
+            // 画像（cachedImage を直接使う）
+            if let uiImage = cachedImage {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
