@@ -141,7 +141,7 @@ struct FAQView: View {
         FAQ(question: "画像アイテムの画質を上げるには？",
             answer: "アイテムサイズを「横長」に変更すると、より大きく鮮明に表示されます。"),
         FAQ(question: "ティア表を削除するには？",
-            answer: "ライブラリのカードを長押しするとコンテキストメニューが表示され、削除できます。"),
+            answer: "ライブラリのカード右上のゴミ箱ボタンで削除できます。"),
     ]
 
     @State private var expandedIndex: Int? = nil
