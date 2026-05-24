@@ -4,15 +4,17 @@ struct ItemPoolView: View {
     @ObservedObject var vm: TierListViewModel
     @Binding var showAddItem: Bool
     @Binding var showPool: Bool
-    @Binding var selectedItem: TierItem?
-    @Binding var draggingItem: TierItem?
-    @Binding var dragLocation: CGPoint
-    @Binding var hoveredRowId: UUID?
+
+    // ItemPoolView 自身は dragPos/dragSel の値を描画に使わない。
+    // DraggableTierItem に渡す参照として保持するだけなので、let で十分。
+    let dragPos: DragPositionState
+    let dragSel: DragInteractionState
+
     let rowFrames: [UUID: CGRect]
     let trayFrame: CGRect
 
     @State private var dragOffset: CGFloat = 0
-    
+
     @Environment(\.tierTheme) private var tierTheme
 
     private let rows = Array(repeating: GridItem(.fixed(65), spacing: 6), count: 4)
@@ -37,29 +39,20 @@ struct ItemPoolView: View {
                 .gesture(
                     DragGesture()
                         .onChanged { value in
-                            // 下方向のみ追従
                             if value.translation.height > 0 {
                                 dragOffset = value.translation.height
                             }
                         }
                         .onEnded { value in
-                            // 一定距離以上で閉じる
                             if value.translation.height > 100 {
-                                withAnimation(.spring()) {
-                                    showPool = false
-                                }
+                                withAnimation(.spring()) { showPool = false }
                             }
-
-                            // 元位置へ戻す
-                            withAnimation(.spring()) {
-                                dragOffset = 0
-                            }
+                            withAnimation(.spring()) { dragOffset = 0 }
                         }
                 )
 
             HStack {
-                Text("未分類")
-                    .font(.headline)
+                Text("未分類").font(.headline)
                 Spacer()
             }
             .padding(.horizontal, 16)
@@ -68,34 +61,26 @@ struct ItemPoolView: View {
             Divider()
 
             if vm.pool.isEmpty {
-
                 Text("アイテムがありません")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(height: gridHeight)
-
             } else {
-
                 ScrollView(.horizontal, showsIndicators: false) {
-
                     LazyHGrid(rows: rows, spacing: spacing) {
-
                         ForEach(vm.pool) { item in
-
                             DraggableTierItem(
                                 item: item,
                                 vm: vm,
                                 rowFrames: rowFrames,
                                 onTap: {
                                     withAnimation(.spring()) {
-                                        selectedItem = item
+                                        dragSel.selectedItem = item
                                         showPool = false
                                     }
                                 },
-                                draggingItem: $draggingItem,
-                                dragLocation: $dragLocation,
-                                hoveredRowId: $hoveredRowId,
-                                selectedItem: $selectedItem,
+                                dragPos: dragPos,
+                                dragSel: dragSel,
                                 trayFrame: trayFrame
                             )
                         }
@@ -108,8 +93,7 @@ struct ItemPoolView: View {
         .offset(y: dragOffset)
         .animation(.spring(), value: dragOffset)
         .background(
-            tierTheme.poolBackground
-                .ignoresSafeArea(edges: .bottom)
+            tierTheme.poolBackground.ignoresSafeArea(edges: .bottom)
         )
     }
 }
@@ -124,7 +108,6 @@ struct RoundedCornerShape: Shape {
             byRoundingCorners: corners,
             cornerRadii: CGSize(width: radius, height: radius)
         )
-
         return Path(path.cgPath)
     }
 }

@@ -10,8 +10,35 @@ struct RowFramePreferenceKey: PreferenceKey {
     }
 }
 
+// MARK: - ドラッグ Ghost View
+//
+// dragPos（毎フレーム）と dragSel（ドラッグ開始/終了）を購読する。
+// TierEditView.body から切り出すことで、dragLocation 変化が
+// TierEditView 全体の再描画を引き起こさなくなる。
+
+private struct DragGhostView: View {
+    @ObservedObject var dragPos: DragPositionState
+    @ObservedObject var dragSel: DragInteractionState
+    let geoMinX: CGFloat
+    let geoMinY: CGFloat
+
+    var body: some View {
+        if let item = dragSel.draggingItem {
+            TierItemView(item: item)
+                .scaleEffect(1.15)
+                .shadow(color: .black.opacity(0.3), radius: 8)
+                .position(
+                    x: dragPos.dragLocation.x - geoMinX,
+                    y: dragPos.dragLocation.y - geoMinY
+                )
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+// MARK: - TierEditView
+
 struct TierEditView: View {
-    // ── vm は HomeView が所有し外から注入 ──
     @ObservedObject var vm: TierListViewModel
 
     let saveId: UUID
@@ -19,7 +46,6 @@ struct TierEditView: View {
     let onSave: (TierListSaveData) -> Void
     let onDismiss: () -> Void
 
-    // タイトル
     @State private var tierListTitle: String
 
     init(
@@ -46,11 +72,18 @@ struct TierEditView: View {
     @State private var showAddHub = false
     @State private var showSavedFeedback = false
 
-    // アイテム操作
-    @State private var selectedItem: TierItem? = nil
-    @State private var draggingItem: TierItem? = nil
-    @State private var dragLocation: CGPoint = .zero
-    @State private var hoveredRowId: UUID? = nil
+    // ── ドラッグ状態（2つの ObservableObject に分離） ──
+    //
+    // dragPos: dragLocation のみ（毎フレーム更新）
+    //   → TierEditView.body は dragPos を直接読まない。
+    //     DragGhostView が独立して購読するため、
+    //     dragLocation 変化で TierEditView 全体が再描画されない。
+    //
+    // dragSel: draggingItem / hoveredRowId / selectedItem（低頻度更新）
+    //   → TierEditView.body は selectedItem と draggingItem を読む（選択UI制御）。
+    //     これらはタップ・ドラッグ開始終了時のみ変化するため再描画頻度は低い。
+    @StateObject private var dragPos = DragPositionState()
+    @StateObject private var dragSel = DragInteractionState()
 
     // フレーム
     @State private var rowFrames: [UUID: CGRect] = [:]
@@ -76,10 +109,8 @@ struct TierEditView: View {
                                         rowId: row.id,
                                         row: $row,
                                         vm: vm,
-                                        selectedItem: $selectedItem,
-                                        draggingItem: $draggingItem,
-                                        dragLocation: $dragLocation,
-                                        hoveredRowId: $hoveredRowId,
+                                        dragPos: dragPos,   // let 渡し（購読なし）
+                                        dragSel: dragSel,   // @ObservedObject 渡し
                                         rowFrames: rowFrames,
                                         trayFrame: trayFrame
                                     )
@@ -124,8 +155,8 @@ struct TierEditView: View {
                             .zIndex(2)
                     }
 
-                    // ── 待機状態：アイテム表示 ──
-                    if let item = selectedItem {
+                    // ── 待機状態：選択アイテム表示 ──
+                    if let item = dragSel.selectedItem {
                         HStack {
                             Spacer()
                             VStack(spacing: 6) {
@@ -157,7 +188,7 @@ struct TierEditView: View {
                     }
 
                     // ── ＋ハブのサブボタン ──
-                    if showAddHub && selectedItem == nil && draggingItem == nil {
+                    if showAddHub && dragSel.selectedItem == nil && dragSel.draggingItem == nil {
                         HStack {
                             VStack(alignment: .leading, spacing: 12) {
                                 Button {
@@ -193,8 +224,8 @@ struct TierEditView: View {
                                             .frame(width: 50, height: 50)
                                             .background(
                                                 vm.rows.count >= 8
-                                                ? Color(.systemGray3)
-                                                : Color.blue
+                                                    ? Color(.systemGray3)
+                                                    : Color.blue
                                             )
                                             .foregroundColor(.white)
                                             .clipShape(Circle())
@@ -222,7 +253,7 @@ struct TierEditView: View {
 
                     // ── フローティングボタン ──
                     HStack {
-                        if selectedItem == nil && draggingItem == nil && !showPool {
+                        if dragSel.selectedItem == nil && dragSel.draggingItem == nil && !showPool {
                             Button {
                                 withAnimation(.spring()) { showAddHub.toggle() }
                             } label: {
@@ -248,10 +279,10 @@ struct TierEditView: View {
 
                         if !showPool {
                             Button {
-                                if selectedItem != nil {
+                                if dragSel.selectedItem != nil {
                                     withAnimation(.spring()) {
-                                        vm.returnToPool(selectedItem!)
-                                        selectedItem = nil
+                                        vm.returnToPool(dragSel.selectedItem!)
+                                        dragSel.selectedItem = nil
                                     }
                                 } else {
                                     withAnimation(.spring()) {
@@ -265,7 +296,7 @@ struct TierEditView: View {
                                         .font(.title2.bold())
                                         .frame(width: 50, height: 50)
                                         .background(
-                                            selectedItem != nil || draggingItem != nil
+                                            dragSel.selectedItem != nil || dragSel.draggingItem != nil
                                                 ? Color.orange
                                                 : showPool ? Color.orange : Color.blue
                                         )
@@ -273,7 +304,9 @@ struct TierEditView: View {
                                         .clipShape(Circle())
                                         .shadow(radius: 4)
 
-                                    if !vm.pool.isEmpty && selectedItem == nil && draggingItem == nil {
+                                    if !vm.pool.isEmpty
+                                        && dragSel.selectedItem == nil
+                                        && dragSel.draggingItem == nil {
                                         Text("\(vm.pool.count)")
                                             .font(.caption2.bold())
                                             .foregroundColor(.white)
@@ -323,33 +356,29 @@ struct TierEditView: View {
                         .zIndex(10)
                     }
 
-                    // ── ドラッグ中のフローティングアイテム ──
-                    if let item = draggingItem {
-                        TierItemView(item: item)
-                            .scaleEffect(1.15)
-                            .shadow(color: .black.opacity(0.3), radius: 8)
-                            .position(
-                                x: dragLocation.x - geo.frame(in: .global).minX,
-                                y: dragLocation.y - geo.frame(in: .global).minY
-                            )
-                            .allowsHitTesting(false)
-                            .zIndex(99)
-                    }
+                    // ── ドラッグ中のフローティング Ghost ──
+                    // DragGhostView が dragPos を独立して購読するため、
+                    // dragLocation 変化でこのbody全体が再描画されない。
+                    DragGhostView(
+                        dragPos: dragPos,
+                        dragSel: dragSel,
+                        geoMinX: geo.frame(in: .global).minX,
+                        geoMinY: geo.frame(in: .global).minY
+                    )
+                    .zIndex(99)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
 
-                // ── 左：戻るボタン → 保存して閉じる ──
+                // ── 左：戻るボタン ──
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
                         saveAndDismiss()
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                                .font(.body.bold())
-                            Text("ライブラリ")
-                                .font(.body)
+                            Image(systemName: "chevron.left").font(.body.bold())
+                            Text("ライブラリ").font(.body)
                         }
                     }
                 }
@@ -397,18 +426,11 @@ struct TierEditView: View {
 
                 // ── 右：保存 ＋ 設定 ──
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    Button {
-                        triggerSaveFeedback()
-                    } label: {
-                        Image(systemName: "square.and.arrow.down")
-                            .font(.body)
+                    Button { triggerSaveFeedback() } label: {
+                        Image(systemName: "square.and.arrow.down").font(.body)
                     }
-
-                    Button {
-                        showTableEdit = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.body)
+                    Button { showTableEdit = true } label: {
+                        Image(systemName: "gearshape").font(.body)
                     }
                 }
             }
@@ -417,11 +439,11 @@ struct TierEditView: View {
                 AddItemSheet(vm: vm)
             }
             .sheet(isPresented: $showItemEdit, onDismiss: {
-                if let item = selectedItem {
-                    selectedItem = latestItem(for: item)
+                if let item = dragSel.selectedItem {
+                    dragSel.selectedItem = latestItem(for: item)
                 }
             }) {
-                if let item = selectedItem {
+                if let item = dragSel.selectedItem {
                     if let poolIdx = vm.poolIndex(for: item.id) {
                         TierItemEditSheet(item: $vm.pool[poolIdx])
                     } else if let rowIdx = vm.rowIndex(for: item.id),
@@ -439,23 +461,18 @@ struct TierEditView: View {
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
                     .onTapGesture {
-                        withAnimation(.easeOut(duration: 0.22)) {
-                            showPool = false
-                        }
+                        withAnimation(.easeOut(duration: 0.22)) { showPool = false }
                     }
             }
         }
-        // ── 2段目：プールパネル（ディムより上） ──
         .overlay(alignment: .bottom) {
             if showPool {
                 ItemPoolView(
                     vm: vm,
                     showAddItem: $showAddItem,
                     showPool: $showPool,
-                    selectedItem: $selectedItem,
-                    draggingItem: $draggingItem,
-                    dragLocation: $dragLocation,
-                    hoveredRowId: $hoveredRowId,
+                    dragPos: dragPos,   // let 渡し（購読なし）
+                    dragSel: dragSel,   // let 渡し（購読なし、子に委ねる）
                     rowFrames: rowFrames,
                     trayFrame: trayFrame
                 )
@@ -488,14 +505,11 @@ struct TierEditView: View {
             createdAt: createdAt
         )
         onSave(data)
-
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             showSavedFeedback = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            withAnimation(.easeOut(duration: 0.25)) {
-                showSavedFeedback = false
-            }
+            withAnimation(.easeOut(duration: 0.25)) { showSavedFeedback = false }
         }
     }
 

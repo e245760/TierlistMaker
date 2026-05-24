@@ -6,6 +6,15 @@ class TierListStore: ObservableObject {
 
     private let storeKey = "tierListStore_v1"
 
+    // MARK: - シリアルキュー
+    //
+    // .userInitiated: ユーザー操作に起因する保存なので高めの優先度
+    // serial（デフォルト）なので複数の persist() が連続しても順番通りに実行される
+    private let saveQueue = DispatchQueue(
+        label: "com.app.tierlist.store",
+        qos: .userInitiated
+    )
+
     init() { load() }
 
     func upsert(_ data: TierListSaveData) {
@@ -23,8 +32,14 @@ class TierListStore: ObservableObject {
     }
 
     private func persist() {
-        guard let encoded = try? JSONEncoder().encode(savedLists) else { return }
-        UserDefaults.standard.set(encoded, forKey: storeKey)
+        // メインスレッドで配列のスナップショットを取る
+        // → キューが実行されるタイミングに関わらず、この時点の内容が書き込まれる
+        let snapshot = savedLists
+
+        saveQueue.async {
+            guard let encoded = try? JSONEncoder().encode(snapshot) else { return }
+            UserDefaults.standard.set(encoded, forKey: self.storeKey)
+        }
     }
 
     private func load() {

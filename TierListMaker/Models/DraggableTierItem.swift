@@ -5,10 +5,12 @@ struct DraggableTierItem: View {
     @ObservedObject var vm: TierListViewModel
     let rowFrames: [UUID: CGRect]
     let onTap: () -> Void
-    @Binding var draggingItem: TierItem?
-    @Binding var dragLocation: CGPoint
-    @Binding var hoveredRowId: UUID?
-    @Binding var selectedItem: TierItem?
+
+    // 毎フレーム更新される位置を購読
+    @ObservedObject var dragPos: DragPositionState
+    // 低頻度の操作状態を購読
+    @ObservedObject var dragSel: DragInteractionState
+
     var trayFrame: CGRect
 
     @State private var pressStartTime: Date? = nil
@@ -16,7 +18,7 @@ struct DraggableTierItem: View {
 
     private let longPressDuration = 0.4
 
-    var isDraggingThis: Bool { draggingItem?.id == item.id }
+    var isDraggingThis: Bool { dragSel.draggingItem?.id == item.id }
 
     var body: some View {
         TierItemView(item: item)
@@ -31,19 +33,19 @@ struct DraggableTierItem: View {
                             pressStartTime = startTime
 
                             DispatchQueue.main.asyncAfter(deadline: .now() + longPressDuration) {
-                                guard pressStartTime == startTime, !isDragging else { return }
-                                isDragging = true
+                                guard self.pressStartTime == startTime, !self.isDragging else { return }
+                                self.isDragging = true
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                withAnimation(.spring()) { draggingItem = item }
+                                withAnimation(.spring()) { self.dragSel.draggingItem = self.item }
                             }
                         }
 
                         if isDragging {
-                            dragLocation = value.location
+                            dragPos.dragLocation = value.location
                             if trayFrame.contains(value.location) {
-                                hoveredRowId = nil
+                                dragSel.hoveredRowId = nil
                             } else {
-                                hoveredRowId = rowFrames.first(where: {
+                                dragSel.hoveredRowId = rowFrames.first(where: {
                                     $0.value.contains(value.location)
                                 })?.key
                             }
@@ -62,11 +64,11 @@ struct DraggableTierItem: View {
                             }
                             isDragging = false
                             withAnimation(.spring()) {
-                                draggingItem = nil
-                                hoveredRowId = nil
+                                dragSel.draggingItem = nil
+                                dragSel.hoveredRowId = nil
                             }
                         } else {
-                            // シングルタップのみ
+                            // シングルタップ
                             onTap()
                         }
                     }
