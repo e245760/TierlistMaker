@@ -40,9 +40,9 @@ enum ItemTextSize: String, CaseIterable, Codable {
 
     var fontSize: CGFloat {
         switch self {
-        case .small:  return 11
-        case .medium: return 13
-        case .large:  return 15
+        case .small:  return 13
+        case .medium: return 17
+        case .large:  return 22
         }
     }
 

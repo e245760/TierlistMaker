@@ -13,10 +13,10 @@ class TierListViewModel: ObservableObject {
     @Published var itemAddedCount: Int = 0
     @Published var addedAssetIds: Set<String> = []
 
-    @Published var defaultLabelSize: LabelSize = .narrow
+    @Published var defaultLabelSize: LabelSize = .square
     @Published var defaultLabelTextSize: LabelTextSize = .medium
     @Published var defaultItemSize: ItemSize = .square
-    @Published var defaultItemTextSize: ItemTextSize = .large
+    @Published var defaultItemTextSize: ItemTextSize = .medium
     @Published var tierTheme: TierTheme = .classic
 
     func addItem(label: String, imageData: Data? = nil) {

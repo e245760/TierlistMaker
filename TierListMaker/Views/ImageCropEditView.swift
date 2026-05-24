@@ -16,6 +16,19 @@ struct ImageCropEditView: View {
     let imageData: Data?
     let itemSize: ItemSize
 
+    // MARK: - Environment
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+
+    // MARK: - 初期値（キャンセル用スナップショット）
+
+    @State private var initialOffsetX: CGFloat = 0
+    @State private var initialOffsetY: CGFloat = 0
+    @State private var initialScale: CGFloat = 1.0
+    @State private var initialCropContain: Bool = true
+    @State private var initialCropTransparentBg: Bool = false
+
     // MARK: - Gesture State
 
     @GestureState private var dragDelta: CGSize = .zero
@@ -23,6 +36,17 @@ struct ImageCropEditView: View {
 
     @State private var isGesturing = false
     @State private var imageAspect: CGFloat = 1.0
+
+    // MARK: - テーマ適応カラー
+
+    private var canvasBg: Color        { Color(.secondarySystemBackground) }
+    private var controlBg: Color       { Color(.systemBackground) }
+    private var primaryColor: Color    { Color(.label) }
+    private var secondaryColor: Color  { Color(.secondaryLabel) }
+    private var separatorColor: Color  { Color(.separator) }
+    private var gridColor: Color       { Color(.label).opacity(0.25) }
+    private var badgeBg: Color         { Color(.systemGray3).opacity(0.85) }
+    private var disabledColor: Color   { Color(.tertiaryLabel) }
 
     // MARK: - Computed
 
@@ -55,7 +79,7 @@ struct ImageCropEditView: View {
     }
 
     /// アイテムのアスペクト比を保ちながら、利用可能な幅に収まる最大サイズを返す。
-    /// 最大高さ 350pt で頭打ち（小画面での溢れ防止）。
+    /// 最大高さ 350pt で頭打ち。
     private func cropFrameSize(availableWidth w: CGFloat) -> CGSize {
         let maxH: CGFloat = 350
         let aspect = itemSize.width / itemSize.height
@@ -69,6 +93,15 @@ struct ImageCropEditView: View {
 
     private func resetAll() {
         withAnimation(.spring()) { offsetX = 0; offsetY = 0; scale = 1.0 }
+    }
+
+    private func cancelEditing() {
+        offsetX           = initialOffsetX
+        offsetY           = initialOffsetY
+        scale             = initialScale
+        cropContain       = initialCropContain
+        cropTransparentBg = initialCropTransparentBg
+        dismiss()
     }
 
     private func commitDrag(_ v: DragGesture.Value, fW: CGFloat, fH: CGFloat) {
@@ -98,7 +131,7 @@ struct ImageCropEditView: View {
             let lo = liveOffset(frameW: fW, frameH: fH)
 
             ZStack {
-                Color.black.ignoresSafeArea()
+                canvasBg.ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     Spacer(minLength: 12)
@@ -113,12 +146,26 @@ struct ImageCropEditView: View {
                 }
             }
         }
-        .background(Color.black)
-        .toolbarBackground(Color.black, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         .navigationTitle("切り取り・拡大縮小")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("キャンセル") { cancelEditing() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("完了") { dismiss() }
+                    .bold()
+            }
+        }
         .onAppear {
+            // キャンセル用スナップショットを保存
+            initialOffsetX           = offsetX
+            initialOffsetY           = offsetY
+            initialScale             = scale
+            initialCropContain       = cropContain
+            initialCropTransparentBg = cropTransparentBg
+            // 画像のアスペクト比を計算
             if let data = imageData, let img = UIImage(data: data), img.size.height > 0 {
                 imageAspect = img.size.width / img.size.height
             }
@@ -150,22 +197,22 @@ struct ImageCropEditView: View {
             }
 
             // グリッドオーバーレイ（操作中のみ）
-            CropGridOverlay()
+            CropGridOverlay(lineColor: gridColor)
                 .opacity(isGesturing ? 1 : 0)
                 .animation(.easeInOut(duration: 0.15), value: isGesturing)
         }
         .frame(width: fW, height: fH)
         .clipped()
-        // フレーム境界線とコーナーマークはclipの外に描画
-        .overlay { Rectangle().strokeBorder(Color.white.opacity(0.5), lineWidth: 0.5) }
-        .overlay { CropCornerMarks() }
+        // フレーム境界線・コーナーマークはclipの外に描画
+        .overlay { Rectangle().strokeBorder(primaryColor.opacity(0.3), lineWidth: 0.5) }
+        .overlay { CropCornerMarks(color: primaryColor) }
         // 拡大率バッジ（操作中のみ）
         .overlay(alignment: .topTrailing) {
             Text(String(format: "×%.2f", ls))
                 .font(.caption2.monospacedDigit().bold())
-                .foregroundColor(.white)
+                .foregroundColor(primaryColor)
                 .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(Color.black.opacity(0.65))
+                .background(badgeBg)
                 .clipShape(Capsule())
                 .padding(8)
                 .opacity(isGesturing ? 1 : 0)
@@ -194,13 +241,13 @@ struct ImageCropEditView: View {
             // ヒント
             Text("ピンチで拡大・ドラッグで移動")
                 .font(.caption)
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(secondaryColor)
                 .padding(.vertical, 12)
 
             // 拡大スライダー
             HStack(spacing: 14) {
                 Image(systemName: "minus.magnifyingglass")
-                    .foregroundColor(.white.opacity(0.55)).font(.callout)
+                    .foregroundColor(secondaryColor).font(.callout)
 
                 Slider(
                     value: Binding(
@@ -215,16 +262,14 @@ struct ImageCropEditView: View {
                     in: scaleMin < 5.0 ? scaleMin...5.0 : 0.0...1.0
                 )
                 .disabled(scaleMin >= 5.0)
-                .tint(.white)
 
                 Image(systemName: "plus.magnifyingglass")
-                    .foregroundColor(.white.opacity(0.55)).font(.callout)
+                    .foregroundColor(secondaryColor).font(.callout)
             }
             .padding(.horizontal, 28)
             .padding(.bottom, 18)
 
-            // セパレータ
-            Color.white.opacity(0.1).frame(height: 0.5)
+            separatorColor.frame(height: 0.5)
 
             // アクションボタン行
             HStack(spacing: 0) {
@@ -232,7 +277,7 @@ struct ImageCropEditView: View {
                 cropControlButton(
                     icon: "arrow.counterclockwise",
                     label: "リセット",
-                    tint: hasCustomCrop ? .white : .white.opacity(0.2)
+                    tint: hasCustomCrop ? primaryColor : disabledColor
                 ) { resetAll() }
                 .disabled(!hasCustomCrop)
 
@@ -242,7 +287,7 @@ struct ImageCropEditView: View {
                 cropControlButton(
                     icon: cropContain ? "square.dashed" : "square.dashed.inset.filled",
                     label: cropContain ? "制限あり" : "制限なし",
-                    tint: cropContain ? Color(hex: "#FFD60A") : .white
+                    tint: cropContain ? Color(hex: "#D4A017") : primaryColor
                 ) {
                     withAnimation(.spring()) { cropContain.toggle(); resetAll() }
                 }
@@ -254,7 +299,7 @@ struct ImageCropEditView: View {
                     cropControlButton(
                         icon: "circle.dotted",
                         label: "透明背景",
-                        tint: cropTransparentBg ? Color.orange : .white
+                        tint: cropTransparentBg ? Color.orange : primaryColor
                     ) {
                         withAnimation(.spring()) { cropTransparentBg.toggle() }
                     }
@@ -265,11 +310,11 @@ struct ImageCropEditView: View {
             .padding(.vertical, 16)
             .animation(.spring(), value: cropContain)
         }
-        .background(Color.black)
+        .background(controlBg)
     }
 
     private var controlSep: some View {
-        Color.white.opacity(0.15).frame(width: 0.5, height: 36)
+        separatorColor.frame(width: 0.5, height: 36)
     }
 
     @ViewBuilder
@@ -293,6 +338,8 @@ struct ImageCropEditView: View {
 // MARK: - 3×3 グリッドオーバーレイ
 
 struct CropGridOverlay: View {
+    var lineColor: Color = Color(.label).opacity(0.25)
+
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
@@ -306,7 +353,7 @@ struct CropGridOverlay: View {
                     path.addLine(to: CGPoint(x: w, y: y))
                 }
             }
-            .stroke(Color.white.opacity(0.5), lineWidth: 0.7)
+            .stroke(lineColor, lineWidth: 0.7)
         }
         .allowsHitTesting(false)
     }
@@ -315,6 +362,7 @@ struct CropGridOverlay: View {
 // MARK: - コーナーマーク（写真アプリ風）
 
 struct CropCornerMarks: View {
+    var color: Color = Color(.label)
     private let len: CGFloat = 20
     private let thickness: CGFloat = 2.5
 
@@ -339,7 +387,7 @@ struct CropCornerMarks: View {
                 path.addLine(to: CGPoint(x: 0, y: h))
                 path.addLine(to: CGPoint(x: 0, y: h - len))
             }
-            .stroke(Color.white, lineWidth: thickness)
+            .stroke(color, lineWidth: thickness)
         }
         .allowsHitTesting(false)
     }

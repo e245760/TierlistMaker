@@ -5,6 +5,10 @@ struct TierRowEditSheet: View {
     @Binding var row: TierRow
     @Environment(\.dismiss) var dismiss
 
+    // TierThemeのcolorSchemeに上書きされた環境を、
+    // アプリのテーマで正しく戻すために取得する
+    @Environment(\.appTheme) private var appTheme
+
     @State private var editedName: String
     @State private var editedColor: Color
     @State private var editedTextColor: Color
@@ -213,5 +217,9 @@ struct TierRowEditSheet: View {
                 }
             }
         }
+        // TierRowViewはTierThemeのcolorSchemeが適用されたスコープ内にあるため、
+        // そこから開かれるシートもそのcolorSchemeを引き継いでしまう。
+        // アプリのテーマで明示的に上書きして正しいテーマを適用する。
+        .environment(\.colorScheme, appTheme.colorScheme)
     }
 }
