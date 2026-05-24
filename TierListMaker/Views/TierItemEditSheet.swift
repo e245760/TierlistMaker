@@ -8,7 +8,7 @@ struct TierItemEditSheet: View {
 
     var body: some View {
         if isImageItem {
-            ImageItemEditSheet(item: $item)
+            ImageItemEditSheet(item: $item, dismissSheet: { dismiss() })
         } else {
             TextItemEditSheet(item: $item)
         }
@@ -157,6 +157,9 @@ struct ImageItemEditSheet: View {
     @Binding var item: TierItem
     @Environment(\.dismiss) var dismiss
 
+    /// 完了タップ時にシートごと閉じるクロージャ（TierItemEditSheet から受け取る）
+    var dismissSheet: (() -> Void)? = nil
+
     // 反転
     @State private var editedFlipH: Bool
     @State private var editedFlipV: Bool
@@ -168,8 +171,9 @@ struct ImageItemEditSheet: View {
     @State private var editedCropContain: Bool
     @State private var editedCropTransparentBg: Bool
 
-    init(item: Binding<TierItem>) {
+    init(item: Binding<TierItem>, dismissSheet: (() -> Void)? = nil) {
         self._item = item
+        self.dismissSheet = dismissSheet
         self._editedFlipH           = State(initialValue: item.wrappedValue.isFlippedHorizontal)
         self._editedFlipV           = State(initialValue: item.wrappedValue.isFlippedVertical)
         self._editedCropOffsetX     = State(initialValue: item.wrappedValue.cropOffsetX)
@@ -241,7 +245,20 @@ struct ImageItemEditSheet: View {
                                 cropContain: $editedCropContain,
                                 cropTransparentBg: $editedCropTransparentBg,
                                 imageData: item.imageData,
-                                itemSize: item.itemSize
+                                itemSize: item.itemSize,
+                                // クロップ完了時：編集値を item に書き戻してからシートを閉じる。
+                                // ImageItemEditSheet の完了ボタンを経由しないため、
+                                // ここで flip / crop の全値を確定させる必要がある。
+                                dismissSheet: {
+                                    item.isFlippedHorizontal = editedFlipH
+                                    item.isFlippedVertical   = editedFlipV
+                                    item.cropOffsetX         = editedCropOffsetX
+                                    item.cropOffsetY         = editedCropOffsetY
+                                    item.cropScale           = editedCropScale
+                                    item.cropContain         = editedCropContain
+                                    item.cropTransparentBg   = editedCropTransparentBg
+                                    dismissSheet?()
+                                }
                             )
                         } label: {
                             HStack {

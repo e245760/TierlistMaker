@@ -16,6 +16,10 @@ struct ImageCropEditView: View {
     let imageData: Data?
     let itemSize: ItemSize
 
+    /// 完了タップ時にシート全体を閉じるクロージャ。
+    /// nil の場合は通常の dismiss（NavigationStack を1段ポップ）にフォールバックする。
+    var dismissSheet: (() -> Void)? = nil
+
     // MARK: - Environment
 
     @Environment(\.dismiss) private var dismiss
@@ -154,7 +158,7 @@ struct ImageCropEditView: View {
                 Button("キャンセル") { cancelEditing() }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("完了") { dismiss() }
+                Button("完了") { dismissSheet?() ?? dismiss() }
                     .bold()
             }
         }
