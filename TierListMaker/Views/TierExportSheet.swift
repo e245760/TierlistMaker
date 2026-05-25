@@ -1,11 +1,47 @@
 import SwiftUI
 import Photos
 
+// MARK: - ExportAspectRatio
+
+enum ExportAspectRatio: String, CaseIterable {
+    case portrait  = "portrait"
+    case square    = "square"
+    case landscape = "landscape"
+
+    var label: String {
+        switch self {
+        case .portrait:  return "縦長"
+        case .square:    return "正方形"
+        case .landscape: return "横長"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .portrait:  return "rectangle.portrait"
+        case .square:    return "square"
+        case .landscape: return "rectangle"
+        }
+    }
+
+    /// スクリーン幅を基準にキャンバスサイズ（pt）を返す
+    func canvasSize(for width: CGFloat) -> CGSize {
+        switch self {
+        case .portrait:  return CGSize(width: width, height: width * 4 / 3)
+        case .square:    return CGSize(width: width, height: width)
+        case .landscape: return CGSize(width: width, height: width * 3 / 4)
+        }
+    }
+}
+
+// MARK: - TierExportSheet
+
 /// 保存ボタンを押したときに表示するエクスポートシート。
 ///
-/// 1. 表示直後に TierListSnapshotView を ImageRenderer で画像化
-/// 2. プレビューを ScrollView に表示
-/// 3. 「写真アプリに保存」ボタンで PHPhotoLibrary に書き出す
+/// 1. 比率選択（縦長 / 正方形 / 横長）
+/// 2. TierListSnapshotView を ImageRenderer でキャンバス幅にレンダリング
+/// 3. 選択した比率のキャンバスに透明背景で合成（PNG出力）
+/// 4. 「写真アプリに保存」ボタンで PHPhotoLibrary に書き出す
 struct TierExportSheet: View {
 
     let vm: TierListViewModel
@@ -15,6 +51,7 @@ struct TierExportSheet: View {
 
     // MARK: - State
 
+    @State private var selectedRatio: ExportAspectRatio = .square
     @State private var renderedImage: UIImage? = nil
     @State private var isRendering = true
     @State private var isSaving    = false
@@ -45,8 +82,12 @@ struct TierExportSheet: View {
                 }
             }
         }
-        // シート表示直後にレンダリング開始
+        // 初回レンダリング
         .task { await renderImage() }
+        // 比率変更時に再レンダリング
+        .onChange(of: selectedRatio) { _ in
+            Task { await renderImage() }
+        }
         .alert("写真へのアクセスを許可してください", isPresented: $showPermissionAlert) {
             Button("設定を開く") {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
@@ -75,72 +116,149 @@ struct TierExportSheet: View {
     @ViewBuilder
     private func previewContent(image: UIImage) -> some View {
         VStack(spacing: 0) {
+
             // 画像プレビュー
             ScrollView {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
-                    .padding(16)
+                // 透明部分をわかりやすくするためチェッカー背景を敷く
+                ZStack {
+                    CheckerboardBackground()
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+                .padding(16)
             }
 
             Divider()
 
-            // 保存ボタン
-            Button {
-                Task { await requestAndSave() }
-            } label: {
+            VStack(spacing: 0) {
+
+                // ── 比率セレクター ──
                 HStack(spacing: 10) {
-                    if isSaving {
-                        ProgressView().tint(.white)
-                    } else {
-                        Image(systemName: savedOK
-                              ? "checkmark.circle.fill"
-                              : "square.and.arrow.down.fill")
+                    ForEach(ExportAspectRatio.allCases, id: \.self) { ratio in
+                        let isSelected = selectedRatio == ratio
+                        Button {
+                            withAnimation(.spring()) { selectedRatio = ratio }
+                        } label: {
+                            VStack(spacing: 5) {
+                                Image(systemName: ratio.icon)
+                                    .font(.title3)
+                                    .foregroundColor(isSelected ? .white : .primary)
+                                Text(ratio.label)
+                                    .font(.caption.bold())
+                                    .foregroundColor(isSelected ? .white : .primary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(isSelected ? Color.blue : Color(.systemGray5))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isRendering)
                     }
-                    Text(saveButtonLabel)
-                        .bold()
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(savedOK ? Color.green : Color.blue)
-                .foregroundColor(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
                 .padding(.horizontal, 24)
-                .padding(.vertical, 16)
-                .animation(.spring(), value: savedOK)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+
+                // ── 保存ボタン ──
+                Button {
+                    Task { await requestAndSave() }
+                } label: {
+                    HStack(spacing: 10) {
+                        if isSaving {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: savedOK
+                                  ? "checkmark.circle.fill"
+                                  : "square.and.arrow.down.fill")
+                        }
+                        Text(saveButtonLabel)
+                            .bold()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(savedOK ? Color.green : Color.blue)
+                    .foregroundColor(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+                    .animation(.spring(), value: savedOK)
+                }
+                .disabled(isSaving || savedOK || isRendering)
             }
-            .disabled(isSaving || savedOK)
         }
     }
 
     private var saveButtonLabel: String {
         if isSaving { return "保存中…" }
         if savedOK  { return "保存しました" }
-        return "写真アプリに保存"
+        return "写真アプリに保存（PNG）"
     }
 
     // MARK: - レンダリング
 
-    /// ImageRenderer はメインスレッドで実行する必要がある
+    /// 処理の流れ:
+    ///   1. TierListSnapshotView をキャンバス幅でレンダリング
+    ///   2. 選択した比率のキャンバスを透明で生成
+    ///   3. スナップショットを高さ方向で収まるよう縮小、中央配置して合成
     @MainActor
     private func renderImage() async {
+        isRendering = true
+        savedOK     = false   // 比率が変わったら保存済みフラグをリセット
+
+        let scale       = UIScreen.main.scale
+        let screenWidth = UIScreen.main.bounds.width
+        let canvasSize  = selectedRatio.canvasSize(for: screenWidth)
+
+        // Step 1: スナップショットをキャンバス幅でレンダリング
         let snapshot = TierListSnapshotView(
             rows: vm.rows,
             title: title,
             defaultLabelSize: vm.defaultLabelSize,
             defaultLabelTextSize: vm.defaultLabelTextSize,
             defaultItemSize: vm.defaultItemSize,
-            tierTheme: vm.tierTheme
+            tierTheme: vm.tierTheme,
+            canvasWidth: canvasSize.width
         )
-        let renderer = ImageRenderer(content: snapshot)
-        renderer.scale = UIScreen.main.scale   // Retina 解像度で出力
-        renderedImage = renderer.uiImage
+        let snapshotRenderer = ImageRenderer(content: snapshot)
+        snapshotRenderer.scale = scale
+        guard let snapshotImage = snapshotRenderer.uiImage else {
+            isRendering = false
+            return
+        }
+
+        // Step 2: スナップショットがキャンバスより高い場合のみ縮小
+        let snapshotSize = snapshotImage.size   // UIImage.size は pt 単位
+        let fitScale: CGFloat = snapshotSize.height > canvasSize.height
+            ? canvasSize.height / snapshotSize.height
+            : 1.0
+
+        let drawWidth  = snapshotSize.width  * fitScale
+        let drawHeight = snapshotSize.height * fitScale
+        let drawX      = (canvasSize.width  - drawWidth)  / 2
+        let drawY      = (canvasSize.height - drawHeight) / 2
+
+        // Step 3: 透明背景キャンバスに合成 → PNG として保持
+        let format        = UIGraphicsImageRendererFormat()
+        format.opaque     = false   // アルファチャンネルを有効化
+        format.scale      = scale
+        let uiRenderer    = UIGraphicsImageRenderer(size: canvasSize, format: format)
+        let composited    = uiRenderer.image { _ in
+            snapshotImage.draw(in: CGRect(x: drawX, y: drawY, width: drawWidth, height: drawHeight))
+        }
+
+        renderedImage = composited
         isRendering   = false
     }
 
-    // MARK: - 写真ライブラリへの保存
+    // MARK: - 写真ライブラリへの保存（PNG形式）
 
     @MainActor
     private func requestAndSave() async {
@@ -149,7 +267,6 @@ struct TierExportSheet: View {
         case .authorized, .limited:
             await saveImage()
         case .notDetermined:
-            // 初回：権限ダイアログを表示して結果を待つ
             let granted = await withCheckedContinuation { cont in
                 PHPhotoLibrary.requestAuthorization(for: .addOnly) {
                     cont.resume(returning: $0)
@@ -161,22 +278,55 @@ struct TierExportSheet: View {
                 showPermissionAlert = true
             }
         default:
-            // denied / restricted
             showPermissionAlert = true
         }
     }
 
+    /// PNG データとして保存することで透明チャンネルを保持する。
+    /// PHAssetCreationRequest を使いフォーマットを明示指定。
     private func saveImage() async {
-        guard let image = renderedImage else { return }
+        guard let image   = renderedImage,
+              let pngData = image.pngData() else { return }
         isSaving = true
         defer { isSaving = false }
         do {
             try await PHPhotoLibrary.shared().performChanges {
-                PHAssetChangeRequest.creationRequestForAsset(from: image)
+                let request = PHAssetCreationRequest.forAsset()
+                request.addResource(with: .photo, data: pngData, options: nil)
             }
             withAnimation(.spring()) { savedOK = true }
         } catch {
             print("[TierExportSheet] 写真保存エラー: \(error)")
+        }
+    }
+}
+
+// MARK: - チェッカーボード背景（透明部分の視覚的表示）
+//
+// プレビュー上で透明エリアを示す。
+// TierExportSheet 専用の軽量実装（Canvas を使わずシンプルに）。
+
+private struct CheckerboardBackground: View {
+    private let tileSize: CGFloat = 10
+
+    var body: some View {
+        Canvas { ctx, size in
+            let cols = Int(ceil(size.width  / tileSize))
+            let rows = Int(ceil(size.height / tileSize))
+            for row in 0..<rows {
+                for col in 0..<cols {
+                    let isLight = (row + col) % 2 == 0
+                    ctx.fill(
+                        Path(CGRect(
+                            x: CGFloat(col) * tileSize,
+                            y: CGFloat(row) * tileSize,
+                            width:  tileSize,
+                            height: tileSize
+                        )),
+                        with: .color(isLight ? Color(.systemGray5) : Color(.systemGray4))
+                    )
+                }
+            }
         }
     }
 }
