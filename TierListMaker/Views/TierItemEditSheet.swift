@@ -20,9 +20,13 @@ struct TextItemEditSheet: View {
     @Binding var item: TierItem
     @Environment(\.dismiss) var dismiss
 
+    // PurchaseManager をシングルトンから直接参照（呼び出し元の変更不要）
+    @ObservedObject private var pm = PurchaseManager.shared
+
     @State private var editedLabel: String
     @State private var editedTextColor: Color
     @State private var editedBgColor: Color
+    @State private var showPaywall = false          // ← Proバッジタップ時に表示
 
     private let maxLength = 12
 
@@ -110,8 +114,13 @@ struct TextItemEditSheet: View {
                     .bold()
                 }
             }
+            .sheet(isPresented: $showPaywall) {
+                PaywallSheet(pm: pm)
+            }
         }
     }
+
+    // MARK: - Color Grid（変更なし）
 
     @ViewBuilder
     func colorGrid(colors: [Color], selected: Binding<Color>) -> some View {
@@ -140,19 +149,53 @@ struct TextItemEditSheet: View {
         .padding(.vertical, 8)
     }
 
+    // MARK: - カスタムカラーピッカー（Pro限定）
+    //
+    // isPro: ColorPicker をそのまま表示
+    // 非Pro: 南京錠＋「Pro」バッジを表示し、タップでペイウォールを開く
+
     @ViewBuilder
     func customColorPicker(label: String, selected: Binding<Color>) -> some View {
         HStack {
-            Text(label).font(.subheadline).foregroundColor(.secondary)
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
             Spacer()
-            ColorPicker("", selection: selected, supportsOpacity: false)
-                .labelsHidden().frame(width: 44, height: 44).scaleEffect(1.3)
+            if pm.isPro {
+                ColorPicker("", selection: selected, supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 44, height: 44)
+                    .scaleEffect(1.3)
+            } else {
+                proLockedBadge
+            }
         }
         .padding(.bottom, 4)
     }
+
+    // MARK: - Pro ロックバッジ
+
+    private var proLockedBadge: some View {
+        Button {
+            showPaywall = true
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "lock.fill")
+                    .font(.caption.bold())
+                Text("Pro")
+                    .font(.caption.bold())
+            }
+            .foregroundColor(.orange)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.orange.opacity(0.12))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
 }
 
-// ── 画像アイテム編集 ──
+// ── 画像アイテム編集（変更なし）──
 struct ImageItemEditSheet: View {
     @Binding var item: TierItem
     @Environment(\.dismiss) var dismiss
@@ -256,9 +299,6 @@ struct ImageItemEditSheet: View {
                                 cropTransparentBg: $editedCropTransparentBg,
                                 cachedImage: cachedImage,
                                 itemSize: item.itemSize,
-                                // クロップ完了時：編集値を item に書き戻してからシートを閉じる。
-                                // ImageItemEditSheet の完了ボタンを経由しないため、
-                                // ここで flip / crop の全値を確定させる必要がある。
                                 dismissSheet: {
                                     item.isFlippedHorizontal = editedFlipH
                                     item.isFlippedVertical   = editedFlipV
@@ -274,7 +314,6 @@ struct ImageItemEditSheet: View {
                             HStack {
                                 Label("切り取り範囲を編集", systemImage: "crop.rotate")
                                 Spacer()
-                                // 状態インジケーター
                                 HStack(spacing: 6) {
                                     if !editedCropContain {
                                         Image(systemName: editedCropTransparentBg ? "circle.dotted" : "square.dashed.inset.filled")

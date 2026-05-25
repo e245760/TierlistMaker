@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LibraryView: View {
     @ObservedObject var store: TierListStore
+    @ObservedObject var pm: PurchaseManager        // ← 追加
     let onOpen: (TierListSaveData?) -> Void
 
     @State private var deletingId: UUID? = nil
@@ -12,6 +13,11 @@ struct LibraryView: View {
         GridItem(.flexible(), spacing: 16),
     ]
 
+    // 上限に達しているか
+    private var isAtLimit: Bool {
+        !pm.canCreate(currentCount: store.savedLists.count)
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -19,6 +25,11 @@ struct LibraryView: View {
                     emptyState
                 } else {
                     ScrollView {
+                        // ── 使用状況バー ──
+                        limitBanner
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+
                         LazyVGrid(columns: columns, spacing: 16) {
                             ForEach(store.savedLists) { saveData in
                                 TierListCard(saveData: saveData)
@@ -51,8 +62,10 @@ struct LibraryView: View {
                     Button {
                         onOpen(nil)
                     } label: {
-                        Image(systemName: "plus")
+                        // 上限時は鍵アイコンに切り替え
+                        Image(systemName: isAtLimit ? "lock.fill" : "plus")
                             .font(.body.bold())
+                            .foregroundColor(isAtLimit ? .orange : .blue)
                     }
                 }
             }
@@ -67,7 +80,58 @@ struct LibraryView: View {
         }
     }
 
-    // ── 空状態 ──
+    // MARK: - 使用状況バー
+
+    @ViewBuilder
+    private var limitBanner: some View {
+        let count = store.savedLists.count
+        let limit = pm.limit
+        let progress = Double(count) / Double(limit)
+
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("\(count) / \(limit)個使用中")
+                    .font(.caption.bold())
+                    .foregroundColor(isAtLimit ? .orange : .secondary)
+
+                Spacer()
+
+                if isAtLimit {
+                    // 上限到達時：アップグレード誘導テキスト
+                    Button {
+                        onOpen(nil)   // → HomeView でペイウォールが開く
+                    } label: {
+                        Label("アップグレード", systemImage: "star.fill")
+                            .font(.caption.bold())
+                            .foregroundColor(.orange)
+                    }
+                } else if pm.isPro {
+                    Label("プロ", systemImage: "checkmark.seal.fill")
+                        .font(.caption.bold())
+                        .foregroundColor(.blue)
+                }
+            }
+
+            // プログレスバー
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(.systemGray5))
+                        .frame(height: 5)
+                    Capsule()
+                        .fill(isAtLimit ? Color.orange : Color.blue)
+                        .frame(width: geo.size.width * progress, height: 5)
+                }
+            }
+            .frame(height: 5)
+        }
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    // MARK: - 空状態
+
     private var emptyState: some View {
         VStack(spacing: 20) {
             Spacer()
@@ -99,16 +163,11 @@ struct LibraryView: View {
     }
 }
 
-// MARK: - Tier List Card
+// MARK: - Tier List Card（変更なし）
 
 struct TierListCard: View {
     let saveData: TierListSaveData
 
-    // MARK: - Color 事前計算
-    //
-    // GeometryReader + ForEach の中で Color(hex:) を呼ぶと、
-    // スクロールや再描画のたびに全行・全アイテム分の変換が走る。
-    // saveData（let）を元に body の外で一度だけ計算しておく。
     private struct RowColors {
         let label: Color
         let items: [Color]
@@ -157,10 +216,7 @@ struct TierListCard: View {
         .shadow(color: .black.opacity(0.07), radius: 6, y: 2)
     }
 
-    // ティア行の色帯（ラベル色 + アイテムエリア）
     private var tierPreview: some View {
-        // previewRowColors を body の前に計算済みのため、
-        // GeometryReader 内では Color(hex:) を呼ばずに済む。
         let rowColors = previewRowColors
         return GeometryReader { geo in
             let count = max(1, rowColors.count)

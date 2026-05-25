@@ -24,7 +24,6 @@ enum ExportAspectRatio: String, CaseIterable {
         }
     }
 
-    /// スクリーン幅を基準にキャンバスサイズ（pt）を返す
     func canvasSize(for width: CGFloat) -> CGSize {
         switch self {
         case .portrait:  return CGSize(width: width, height: width * 4 / 3)
@@ -36,12 +35,20 @@ enum ExportAspectRatio: String, CaseIterable {
 
 // MARK: - TierExportSheet
 
-/// 保存ボタンを押したときに表示するエクスポートシート。
+/// ── レンダリング戦略 ──
 ///
-/// 1. 比率選択（縦長 / 正方形 / 横長）
-/// 2. TierListSnapshotView を ImageRenderer でキャンバス幅にレンダリング
-/// 3. 選択した比率のキャンバスに透明背景で合成（PNG出力）
-/// 4. 「写真アプリに保存」ボタンで PHPhotoLibrary に書き出す
+/// Phase 1: canvasWidth でプローブレンダリングして正確な自然高さを計測
+///
+/// [A] 自然高さ ≤ キャンバス高さ
+///     targetHeight を渡して行を引き伸ばしキャンバスを埋める（透明なし）
+///
+/// [B] 自然高さ > キャンバス高さ（オーバーフロー）
+///     「仮想幅」を二分探索で求める。
+///     virtualWidth × s = canvasWidth になる virtualWidth を探し、
+///     その幅でレンダリング → スケール s で縮小 → キャンバスにぴったり合成。
+///     透明余白なし。アイテムは s 倍（若干縮小）。
+///
+/// 出力は常に PNG（透明チャンネル保持）。
 struct TierExportSheet: View {
 
     let vm: TierListViewModel
@@ -49,16 +56,12 @@ struct TierExportSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    // MARK: - State
-
     @State private var selectedRatio: ExportAspectRatio = .square
     @State private var renderedImage: UIImage? = nil
     @State private var isRendering = true
     @State private var isSaving    = false
     @State private var savedOK     = false
     @State private var showPermissionAlert = false
-
-    // MARK: - Body
 
     var body: some View {
         NavigationStack {
@@ -82,9 +85,7 @@ struct TierExportSheet: View {
                 }
             }
         }
-        // 初回レンダリング
         .task { await renderImage() }
-        // 比率変更時に再レンダリング
         .onChange(of: selectedRatio) { _ in
             Task { await renderImage() }
         }
@@ -99,31 +100,26 @@ struct TierExportSheet: View {
         }
     }
 
-    // MARK: - レンダリング中プレースホルダー
+    // MARK: - Rendering Placeholder
 
     private var renderingPlaceholder: some View {
         VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.2)
+            ProgressView().scaleEffect(1.2)
             Text("プレビューを生成中…")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
     }
 
-    // MARK: - プレビューコンテンツ
+    // MARK: - Preview Content
 
     @ViewBuilder
     private func previewContent(image: UIImage) -> some View {
         VStack(spacing: 0) {
-
-            // 画像プレビュー
             ScrollView {
-                // 透明部分をわかりやすくするためチェッカー背景を敷く
                 ZStack {
                     CheckerboardBackground()
                         .clipShape(RoundedRectangle(cornerRadius: 12))
-
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFit()
@@ -136,8 +132,7 @@ struct TierExportSheet: View {
             Divider()
 
             VStack(spacing: 0) {
-
-                // ── 比率セレクター ──
+                // 比率セレクター
                 HStack(spacing: 10) {
                     ForEach(ExportAspectRatio.allCases, id: \.self) { ratio in
                         let isSelected = selectedRatio == ratio
@@ -167,7 +162,7 @@ struct TierExportSheet: View {
                 .padding(.top, 16)
                 .padding(.bottom, 12)
 
-                // ── 保存ボタン ──
+                // 保存ボタン
                 Button {
                     Task { await requestAndSave() }
                 } label: {
@@ -179,8 +174,7 @@ struct TierExportSheet: View {
                                   ? "checkmark.circle.fill"
                                   : "square.and.arrow.down.fill")
                         }
-                        Text(saveButtonLabel)
-                            .bold()
+                        Text(saveButtonLabel).bold()
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -202,22 +196,75 @@ struct TierExportSheet: View {
         return "写真アプリに保存（PNG）"
     }
 
-    // MARK: - レンダリング
+    // MARK: - Render
 
-    /// 処理の流れ:
-    ///   1. TierListSnapshotView をキャンバス幅でレンダリング
-    ///   2. 選択した比率のキャンバスを透明で生成
-    ///   3. スナップショットを高さ方向で収まるよう縮小、中央配置して合成
     @MainActor
     private func renderImage() async {
         isRendering = true
-        savedOK     = false   // 比率が変わったら保存済みフラグをリセット
+        savedOK     = false
 
         let scale       = UIScreen.main.scale
         let screenWidth = UIScreen.main.bounds.width
         let canvasSize  = selectedRatio.canvasSize(for: screenWidth)
 
-        // Step 1: スナップショットをキャンバス幅でレンダリング
+        // ── Phase 1: プローブレンダリングで正確な自然高さを計測 ──
+        guard let probeImage = render(canvasWidth: canvasSize.width,
+                                      targetHeight: nil,
+                                      scale: scale) else {
+            isRendering = false
+            return
+        }
+        let naturalHeight = probeImage.size.height
+
+        if naturalHeight <= canvasSize.height {
+            // ── ケース A: 行引き伸ばし ──
+            renderedImage = render(canvasWidth: canvasSize.width,
+                                   targetHeight: canvasSize.height,
+                                   scale: scale)
+
+        } else {
+            // ── ケース B: 仮想幅グリッド再計算 ──
+            //
+            // 目標: virtualWidth × s = canvasWidth
+            //       s = canvasHeight / naturalHeight(virtualWidth)
+            //
+            // virtualWidth を二分探索で求め、その幅でレンダリングして
+            // スケール s で縮小すると幅・高さともキャンバスにぴったり収まる。
+
+            let virtualWidth = findOptimalVirtualWidth(canvasSize: canvasSize)
+
+            guard let expandedImage = render(canvasWidth: virtualWidth,
+                                              targetHeight: nil,
+                                              scale: scale) else {
+                isRendering = false
+                return
+            }
+
+            // 実際の描画高さを使ってスケールを確定（近似誤差を吸収）
+            let s     = canvasSize.height / expandedImage.size.height
+            let drawW = expandedImage.size.width  * s
+            let drawH = expandedImage.size.height * s
+            // 二分探索の精度により drawX, drawY は ≈ 0（最大でも数 pt 以内）
+            let drawX = (canvasSize.width  - drawW) / 2
+            let drawY = (canvasSize.height - drawH) / 2
+
+            let format    = UIGraphicsImageRendererFormat()
+            format.opaque = false
+            format.scale  = scale
+            let uiRenderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
+            renderedImage  = uiRenderer.image { _ in
+                expandedImage.draw(in: CGRect(x: drawX, y: drawY, width: drawW, height: drawH))
+            }
+        }
+
+        isRendering = false
+    }
+
+    /// TierListSnapshotView を指定パラメータでレンダリングして UIImage を返す。
+    @MainActor
+    private func render(canvasWidth: CGFloat,
+                        targetHeight: CGFloat?,
+                        scale: CGFloat) -> UIImage? {
         let snapshot = TierListSnapshotView(
             rows: vm.rows,
             title: title,
@@ -225,40 +272,79 @@ struct TierExportSheet: View {
             defaultLabelTextSize: vm.defaultLabelTextSize,
             defaultItemSize: vm.defaultItemSize,
             tierTheme: vm.tierTheme,
-            canvasWidth: canvasSize.width
+            canvasWidth: canvasWidth,
+            targetHeight: targetHeight
         )
-        let snapshotRenderer = ImageRenderer(content: snapshot)
-        snapshotRenderer.scale = scale
-        guard let snapshotImage = snapshotRenderer.uiImage else {
-            isRendering = false
-            return
-        }
-
-        // Step 2: スナップショットがキャンバスより高い場合のみ縮小
-        let snapshotSize = snapshotImage.size   // UIImage.size は pt 単位
-        let fitScale: CGFloat = snapshotSize.height > canvasSize.height
-            ? canvasSize.height / snapshotSize.height
-            : 1.0
-
-        let drawWidth  = snapshotSize.width  * fitScale
-        let drawHeight = snapshotSize.height * fitScale
-        let drawX      = (canvasSize.width  - drawWidth)  / 2
-        let drawY      = (canvasSize.height - drawHeight) / 2
-
-        // Step 3: 透明背景キャンバスに合成 → PNG として保持
-        let format        = UIGraphicsImageRendererFormat()
-        format.opaque     = false   // アルファチャンネルを有効化
-        format.scale      = scale
-        let uiRenderer    = UIGraphicsImageRenderer(size: canvasSize, format: format)
-        let composited    = uiRenderer.image { _ in
-            snapshotImage.draw(in: CGRect(x: drawX, y: drawY, width: drawWidth, height: drawHeight))
-        }
-
-        renderedImage = composited
-        isRendering   = false
+        let renderer = ImageRenderer(content: snapshot)
+        renderer.scale = scale
+        return renderer.uiImage
     }
 
-    // MARK: - 写真ライブラリへの保存（PNG形式）
+    // MARK: - Virtual Width Binary Search
+
+    /// TierListSnapshotView の高さ計算を模倣し、指定幅での自然な高さを返す。
+    ///
+    /// ヘッダー高さ（36pt）は近似値だが、最終的に実際の描画高さで補正するため問題ない。
+    /// TierListSnapshotView の以下のロジックを再現する:
+    ///   - itemsPerRow = floor(itemAreaWidth / (itemWidth + 4))
+    ///   - rowHeight   = max(itemH + 8, chunkCount × (itemH + 4) + 8)
+    ///   - separators  = rows.count × 0.5pt（各行の下）
+    private func computeNaturalHeight(virtualWidth: CGFloat) -> CGFloat {
+        let itemH       = vm.defaultItemSize.height
+        let itemW       = vm.defaultItemSize.width
+        let labelW      = vm.defaultLabelSize.width
+        let itemAreaW   = virtualWidth - labelW
+        let perRow      = max(1, Int(itemAreaW / (itemW + 4)))
+        let headerH: CGFloat  = 36          // subheadline + padding×2 + divider
+        let separators: CGFloat = CGFloat(vm.rows.count) * 0.5
+
+        let rowsH = vm.rows.reduce(CGFloat(0)) { acc, row in
+            let count  = row.items.count
+            let chunks = count == 0 ? 0 : Int(ceil(Double(count) / Double(perRow)))
+            let minH   = itemH + 8
+            let rowH   = chunks == 0 ? minH : max(minH, CGFloat(chunks) * (itemH + 4) + 8)
+            return acc + rowH
+        }
+
+        return headerH + rowsH + separators
+    }
+
+    /// `virtualWidth × s = canvasWidth`（s = canvasHeight / naturalHeight(virtualWidth)）
+    /// を満たす最小の virtualWidth を二分探索で求める。
+    ///
+    /// アルゴリズムの根拠:
+    ///   f(vw) = vw × (canvasHeight / naturalHeight(vw)) は単調非減少。
+    ///   ・行内区間: naturalHeight 一定、vw 増加 → f 増加
+    ///   ・行数が変わる境界: naturalHeight が段階的に減少 → s が増加 → f がジャンプ増加
+    ///   よって二分探索が有効。
+    ///
+    /// 収束後の virtualWidth でレンダリングし、実際の描画高さでスケールを再計算
+    /// することで、近似ヘッダー高さの誤差（±2pt程度）を吸収する。
+    private func findOptimalVirtualWidth(canvasSize: CGSize) -> CGFloat {
+        // 上限：最多アイテム行が1行に収まる幅
+        let maxItems = vm.rows.map { $0.items.count }.max() ?? 1
+        let hiBase   = vm.defaultLabelSize.width
+                     + CGFloat(max(maxItems, 1)) * (vm.defaultItemSize.width + 4)
+                     + 8
+        var lo: CGFloat = canvasSize.width
+        var hi: CGFloat = max(hiBase, canvasSize.width * 3)
+
+        for _ in 0..<64 {
+            guard hi - lo > 0.25 else { break }
+            let mid      = (lo + hi) / 2
+            let naturalH = computeNaturalHeight(virtualWidth: mid)
+            let s        = canvasSize.height / naturalH
+            // mid × s がキャンバス幅を下回るなら → まだ幅が足りない
+            if mid * s < canvasSize.width - 0.5 {
+                lo = mid
+            } else {
+                hi = mid
+            }
+        }
+        return hi
+    }
+
+    // MARK: - Save
 
     @MainActor
     private func requestAndSave() async {
@@ -282,8 +368,6 @@ struct TierExportSheet: View {
         }
     }
 
-    /// PNG データとして保存することで透明チャンネルを保持する。
-    /// PHAssetCreationRequest を使いフォーマットを明示指定。
     private func saveImage() async {
         guard let image   = renderedImage,
               let pngData = image.pngData() else { return }
@@ -301,10 +385,7 @@ struct TierExportSheet: View {
     }
 }
 
-// MARK: - チェッカーボード背景（透明部分の視覚的表示）
-//
-// プレビュー上で透明エリアを示す。
-// TierExportSheet 専用の軽量実装（Canvas を使わずシンプルに）。
+// MARK: - Checkerboard Background
 
 private struct CheckerboardBackground: View {
     private let tileSize: CGFloat = 10
@@ -320,8 +401,7 @@ private struct CheckerboardBackground: View {
                         Path(CGRect(
                             x: CGFloat(col) * tileSize,
                             y: CGFloat(row) * tileSize,
-                            width:  tileSize,
-                            height: tileSize
+                            width: tileSize, height: tileSize
                         )),
                         with: .color(isLight ? Color(.systemGray5) : Color(.systemGray4))
                     )

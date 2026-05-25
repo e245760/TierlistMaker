@@ -9,9 +9,13 @@ struct TierRowEditSheet: View {
     // アプリのテーマで正しく戻すために取得する
     @Environment(\.appTheme) private var appTheme
 
+    // PurchaseManager をシングルトンから直接参照（呼び出し元の変更不要）
+    @ObservedObject private var pm = PurchaseManager.shared
+
     @State private var editedName: String
     @State private var editedColor: Color
     @State private var editedTextColor: Color
+    @State private var showPaywall = false          // ← Proバッジタップ時に表示
 
     let vm: TierListViewModel
 
@@ -124,18 +128,11 @@ struct TierRowEditSheet: View {
                                 }
                             }
                             .padding(.vertical, 8)
+
                             Divider()
-                            HStack {
-                                Text("カスタムカラー")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                Spacer()
-                                ColorPicker("", selection: $editedColor, supportsOpacity: false)
-                                    .labelsHidden()
-                                    .frame(width: 48, height: 48)
-                                    .scaleEffect(1.4)
-                            }
-                            .padding(.bottom, 4)
+
+                            // カスタムカラー（Pro限定）
+                            customColorRow(label: "カスタムカラー", selected: $editedColor)
                         }
                     }
 
@@ -184,17 +181,9 @@ struct TierRowEditSheet: View {
                             }
                         }
                         .padding(.vertical, 8)
-                        HStack {
-                            Text("カスタムカラー")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            ColorPicker("", selection: $editedTextColor, supportsOpacity: false)
-                                .labelsHidden()
-                                .frame(width: 48, height: 48)
-                                .scaleEffect(1.4)
-                        }
-                        .padding(.bottom, 4)
+
+                        // カスタムカラー（Pro限定）
+                        customColorRow(label: "カスタムカラー", selected: $editedTextColor)
                     }
                 }
             }
@@ -216,10 +205,58 @@ struct TierRowEditSheet: View {
                     .bold()
                 }
             }
+            .sheet(isPresented: $showPaywall) {
+                PaywallSheet(pm: pm)
+            }
         }
         // TierRowViewはTierThemeのcolorSchemeが適用されたスコープ内にあるため、
         // そこから開かれるシートもそのcolorSchemeを引き継いでしまう。
         // アプリのテーマで明示的に上書きして正しいテーマを適用する。
         .environment(\.colorScheme, appTheme.colorScheme)
+    }
+
+    // MARK: - カスタムカラー行（Pro限定）
+    //
+    // isPro: ColorPicker をそのまま表示
+    // 非Pro: 南京錠＋「Pro」バッジを表示し、タップでペイウォールを開く
+
+    @ViewBuilder
+    private func customColorRow(label: String, selected: Binding<Color>) -> some View {
+        HStack {
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            Spacer()
+            if pm.isPro {
+                ColorPicker("", selection: selected, supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 48, height: 48)
+                    .scaleEffect(1.4)
+            } else {
+                proLockedBadge
+            }
+        }
+        .padding(.bottom, 4)
+    }
+
+    // MARK: - Pro ロックバッジ
+
+    private var proLockedBadge: some View {
+        Button {
+            showPaywall = true
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "lock.fill")
+                    .font(.caption.bold())
+                Text("Pro")
+                    .font(.caption.bold())
+            }
+            .foregroundColor(.orange)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.orange.opacity(0.12))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }

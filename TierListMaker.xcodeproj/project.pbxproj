@@ -271,7 +271,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TierListMaker/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = sorta;
+				INFOPLIST_KEY_CFBundleDisplayName = SortA;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.graphics-design";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "ティア表の画像を写真アプリに保存します。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "ティア表のアイテムに写真を使用します";
@@ -310,7 +310,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TierListMaker/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = sorta;
+				INFOPLIST_KEY_CFBundleDisplayName = SortA;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.graphics-design";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "ティア表の画像を写真アプリに保存します。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "ティア表のアイテムに写真を使用します";
