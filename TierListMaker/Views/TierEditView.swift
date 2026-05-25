@@ -200,7 +200,7 @@ struct TierEditView: View {
     @State private var showTableEdit  = false
     @State private var showItemEdit   = false
     @State private var showAddHub     = false
-    @State private var showSavedFeedback = false
+    @State private var showExportSheet = false
 
     // MARK: - タイトル編集
     // ★ 旧: isEditingTitle / finishEditing() / onChange(of: title) がここにあった
@@ -300,16 +300,6 @@ struct TierEditView: View {
                     )
                     .zIndex(6)
 
-                    // ── 保存フィードバック ──
-                    // ★ 旧: ZStack { Capsule ... HStack { checkmark ... } } がインラインにあった
-                    // → TierSavedFeedback に切り出し
-
-                    if showSavedFeedback {
-                        TierSavedFeedback()
-                            .padding(.bottom, 110)
-                            .zIndex(10)
-                    }
-
                     // ── ドラッグ Ghost ──
 
                     DragGhostView(
@@ -357,6 +347,9 @@ struct TierEditView: View {
             .sheet(isPresented: $showTableEdit) {
                 TableEditSheet(vm: vm)
             }
+            .sheet(isPresented: $showExportSheet) {
+                TierExportSheet(vm: vm, title: normalizedTitle)
+            }
         }
         .itemPoolOverlay(
             vm: vm,
@@ -386,13 +379,8 @@ struct TierEditView: View {
             title: normalizedTitle,
             createdAt: createdAt
         )
-        onSave(data)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            showSavedFeedback = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            withAnimation(.easeOut(duration: 0.25)) { showSavedFeedback = false }
-        }
+        onSave(data)           // ライブラリへ保存（従来通り）
+        showExportSheet = true // プレビューシートを開く
     }
 
     // MARK: - Helpers

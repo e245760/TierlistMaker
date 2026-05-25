@@ -10,9 +10,22 @@
 		5A7560062FBB4D010070345F /* TierListMaker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TierListMaker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5ACBBBED2FC3C8BA000F1749 /* Exceptions for "TierListMaker" folder in "TierListMaker" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 5A7560052FBB4D010070345F /* TierListMaker */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		5A7560082FBB4D010070345F /* TierListMaker */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5ACBBBED2FC3C8BA000F1749 /* Exceptions for "TierListMaker" folder in "TierListMaker" target */,
+			);
 			path = TierListMaker;
 			sourceTree = "<group>";
 		};
@@ -257,8 +270,10 @@
 				DEVELOPMENT_TEAM = 9MC9R5J275;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TierListMaker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = sorta;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.graphics-design";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "ティア表の画像を写真アプリに保存します。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "ティア表のアイテムに写真を使用します";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -294,8 +309,10 @@
 				DEVELOPMENT_TEAM = 9MC9R5J275;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TierListMaker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = sorta;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.graphics-design";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "ティア表の画像を写真アプリに保存します。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "ティア表のアイテムに写真を使用します";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

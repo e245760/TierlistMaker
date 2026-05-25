@@ -10,6 +10,8 @@ struct TierListSaveData: Identifiable, Codable {
     var defaultItemSize: ItemSize
     var defaultItemTextSize: ItemTextSize
     var tierTheme: TierTheme
+    /// 追加済み写真アセットID（フォトピッカーで再追加を防ぐために保持）
+    var addedAssetIds: Set<String>
     var createdAt: Date
     var updatedAt: Date
 
@@ -23,6 +25,7 @@ struct TierListSaveData: Identifiable, Codable {
         defaultItemSize: ItemSize,
         defaultItemTextSize: ItemTextSize = .large,
         tierTheme: TierTheme = .classic,
+        addedAssetIds: Set<String> = [],
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -35,6 +38,7 @@ struct TierListSaveData: Identifiable, Codable {
         self.defaultItemSize     = defaultItemSize
         self.defaultItemTextSize = defaultItemTextSize
         self.tierTheme           = tierTheme
+        self.addedAssetIds       = addedAssetIds
         self.createdAt           = createdAt
         self.updatedAt           = updatedAt
     }
@@ -47,6 +51,8 @@ struct TierListSaveData: Identifiable, Codable {
     // デコード優先順位:
     //   1. "tierTheme" キーが存在すればそのまま使う
     //   2. なければ旧 "theme" キーを読み、"dark" → .dark、それ以外 → .classic にマッピング
+    //
+    // addedAssetIds: 旧データにキーがない場合は空 Set にフォールバック
 
     enum CodingKeys: String, CodingKey {
         case id, title, rows, pool
@@ -54,6 +60,7 @@ struct TierListSaveData: Identifiable, Codable {
         case defaultItemSize, defaultItemTextSize
         case tierTheme
         case legacyTheme = "theme"   // 旧キー（読み取り専用）
+        case addedAssetIds
         case createdAt, updatedAt
     }
 
@@ -67,6 +74,8 @@ struct TierListSaveData: Identifiable, Codable {
         defaultLabelTextSize = try c.decode(LabelTextSize.self, forKey: .defaultLabelTextSize)
         defaultItemSize      = try c.decode(ItemSize.self,      forKey: .defaultItemSize)
         defaultItemTextSize  = try c.decodeIfPresent(ItemTextSize.self, forKey: .defaultItemTextSize) ?? .large
+        // 旧データにキーがなければ空 Set にフォールバック（後方互換）
+        addedAssetIds        = try c.decodeIfPresent(Set<String>.self, forKey: .addedAssetIds) ?? []
         createdAt            = try c.decode(Date.self,          forKey: .createdAt)
         updatedAt            = try c.decode(Date.self,          forKey: .updatedAt)
 
@@ -92,6 +101,7 @@ struct TierListSaveData: Identifiable, Codable {
         try c.encode(defaultItemSize,      forKey: .defaultItemSize)
         try c.encode(defaultItemTextSize,  forKey: .defaultItemTextSize)
         try c.encode(tierTheme,            forKey: .tierTheme)
+        try c.encode(addedAssetIds,        forKey: .addedAssetIds)
         try c.encode(createdAt,            forKey: .createdAt)
         try c.encode(updatedAt,            forKey: .updatedAt)
         // legacyTheme は書き出さない

@@ -166,6 +166,7 @@ class TierListViewModel: ObservableObject {
             defaultItemSize: defaultItemSize,
             defaultItemTextSize: defaultItemTextSize,
             tierTheme: tierTheme,
+            addedAssetIds: addedAssetIds,
             createdAt: createdAt,
             updatedAt: Date()
         )
@@ -179,5 +180,6 @@ class TierListViewModel: ObservableObject {
         defaultItemSize      = data.defaultItemSize
         defaultItemTextSize  = data.defaultItemTextSize
         tierTheme            = data.tierTheme
+        addedAssetIds        = data.addedAssetIds
     }
 }
