@@ -41,12 +41,11 @@ enum ExportAspectRatio: String, CaseIterable {
 ///
 /// [A] 自然高さ ≤ キャンバス高さ
 ///     targetHeight を渡して行を引き伸ばしキャンバスを埋める（透明なし）
+///     ※ 高さ配分は TierListSnapshotView 内の反復アルゴリズムで行う
 ///
 /// [B] 自然高さ > キャンバス高さ（オーバーフロー）
-///     「仮想幅」を二分探索で求める。
-///     virtualWidth × s = canvasWidth になる virtualWidth を探し、
-///     その幅でレンダリング → スケール s で縮小 → キャンバスにぴったり合成。
-///     透明余白なし。アイテムは s 倍（若干縮小）。
+///     「仮想幅」を二分探索で求め、その幅でレンダリングしてスケールダウン。
+///     スケール係数は min(幅方向, 高さ方向) で両方向の溢れを防ぐ。
 ///
 /// 出力は常に PNG（透明チャンネル保持）。
 struct TierExportSheet: View {
@@ -67,7 +66,6 @@ struct TierExportSheet: View {
         NavigationStack {
             ZStack {
                 Color(.systemGroupedBackground).ignoresSafeArea()
-
                 if isRendering {
                     renderingPlaceholder
                 } else if let image = renderedImage {
@@ -86,9 +84,7 @@ struct TierExportSheet: View {
             }
         }
         .task { await renderImage() }
-        .onChange(of: selectedRatio) { _ in
-            Task { await renderImage() }
-        }
+        .onChange(of: selectedRatio) { _ in Task { await renderImage() } }
         .alert("写真へのアクセスを許可してください", isPresented: $showPermissionAlert) {
             Button("設定を開く") {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
@@ -132,7 +128,6 @@ struct TierExportSheet: View {
             Divider()
 
             VStack(spacing: 0) {
-                // 比率セレクター
                 HStack(spacing: 10) {
                     ForEach(ExportAspectRatio.allCases, id: \.self) { ratio in
                         let isSelected = selectedRatio == ratio
@@ -162,7 +157,6 @@ struct TierExportSheet: View {
                 .padding(.top, 16)
                 .padding(.bottom, 12)
 
-                // 保存ボタン
                 Button {
                     Task { await requestAndSave() }
                 } label: {
@@ -207,7 +201,7 @@ struct TierExportSheet: View {
         let screenWidth = UIScreen.main.bounds.width
         let canvasSize  = selectedRatio.canvasSize(for: screenWidth)
 
-        // ── Phase 1: プローブレンダリングで正確な自然高さを計測 ──
+        // Phase 1: 正確な自然高さを計測
         guard let probeImage = render(canvasWidth: canvasSize.width,
                                       targetHeight: nil,
                                       scale: scale) else {
@@ -218,19 +212,13 @@ struct TierExportSheet: View {
 
         if naturalHeight <= canvasSize.height {
             // ── ケース A: 行引き伸ばし ──
+            // TierListSnapshotView 内の反復アルゴリズムが各行の高さを正しく配分する
             renderedImage = render(canvasWidth: canvasSize.width,
                                    targetHeight: canvasSize.height,
                                    scale: scale)
 
         } else {
             // ── ケース B: 仮想幅グリッド再計算 ──
-            //
-            // 目標: virtualWidth × s = canvasWidth
-            //       s = canvasHeight / naturalHeight(virtualWidth)
-            //
-            // virtualWidth を二分探索で求め、その幅でレンダリングして
-            // スケール s で縮小すると幅・高さともキャンバスにぴったり収まる。
-
             let virtualWidth = findOptimalVirtualWidth(canvasSize: canvasSize)
 
             guard let expandedImage = render(canvasWidth: virtualWidth,
@@ -240,13 +228,15 @@ struct TierExportSheet: View {
                 return
             }
 
-            // 実際の描画高さを使ってスケールを確定（近似誤差を吸収）
-            let s     = canvasSize.height / expandedImage.size.height
+            // min(幅スケール, 高さスケール) で両方向の溢れを防ぐ
+            // → drawX, drawY が必ず ≥ 0 になりクリッピングなし
+            let sW    = canvasSize.width  / expandedImage.size.width
+            let sH    = canvasSize.height / expandedImage.size.height
+            let s     = min(sW, sH)
             let drawW = expandedImage.size.width  * s
             let drawH = expandedImage.size.height * s
-            // 二分探索の精度により drawX, drawY は ≈ 0（最大でも数 pt 以内）
-            let drawX = (canvasSize.width  - drawW) / 2
-            let drawY = (canvasSize.height - drawH) / 2
+            let drawX = (canvasSize.width  - drawW) / 2   // ≥ 0 保証
+            let drawY = (canvasSize.height - drawH) / 2   // ≥ 0 保証
 
             let format    = UIGraphicsImageRendererFormat()
             format.opaque = false
@@ -260,7 +250,6 @@ struct TierExportSheet: View {
         isRendering = false
     }
 
-    /// TierListSnapshotView を指定パラメータでレンダリングして UIImage を返す。
     @MainActor
     private func render(canvasWidth: CGFloat,
                         targetHeight: CGFloat?,
@@ -282,20 +271,14 @@ struct TierExportSheet: View {
 
     // MARK: - Virtual Width Binary Search
 
-    /// TierListSnapshotView の高さ計算を模倣し、指定幅での自然な高さを返す。
-    ///
-    /// ヘッダー高さ（36pt）は近似値だが、最終的に実際の描画高さで補正するため問題ない。
-    /// TierListSnapshotView の以下のロジックを再現する:
-    ///   - itemsPerRow = floor(itemAreaWidth / (itemWidth + 4))
-    ///   - rowHeight   = max(itemH + 8, chunkCount × (itemH + 4) + 8)
-    ///   - separators  = rows.count × 0.5pt（各行の下）
+    /// TierListSnapshotView の高さ計算を模倣し、指定幅での自然な高さを返す（近似）。
     private func computeNaturalHeight(virtualWidth: CGFloat) -> CGFloat {
-        let itemH       = vm.defaultItemSize.height
-        let itemW       = vm.defaultItemSize.width
-        let labelW      = vm.defaultLabelSize.width
-        let itemAreaW   = virtualWidth - labelW
-        let perRow      = max(1, Int(itemAreaW / (itemW + 4)))
-        let headerH: CGFloat  = 36          // subheadline + padding×2 + divider
+        let itemH      = vm.defaultItemSize.height
+        let itemW      = vm.defaultItemSize.width
+        let labelW     = vm.defaultLabelSize.width
+        let itemAreaW  = virtualWidth - labelW
+        let perRow     = max(1, Int(itemAreaW / (itemW + 4)))
+        let headerH: CGFloat   = 36
         let separators: CGFloat = CGFloat(vm.rows.count) * 0.5
 
         let rowsH = vm.rows.reduce(CGFloat(0)) { acc, row in
@@ -305,23 +288,14 @@ struct TierExportSheet: View {
             let rowH   = chunks == 0 ? minH : max(minH, CGFloat(chunks) * (itemH + 4) + 8)
             return acc + rowH
         }
-
         return headerH + rowsH + separators
     }
 
-    /// `virtualWidth × s = canvasWidth`（s = canvasHeight / naturalHeight(virtualWidth)）
-    /// を満たす最小の virtualWidth を二分探索で求める。
+    /// `virtualWidth × s = canvasWidth`（s = canvasHeight / naturalHeight(vw)）を
+    /// 満たす最小の virtualWidth を二分探索で求める。
     ///
-    /// アルゴリズムの根拠:
-    ///   f(vw) = vw × (canvasHeight / naturalHeight(vw)) は単調非減少。
-    ///   ・行内区間: naturalHeight 一定、vw 増加 → f 増加
-    ///   ・行数が変わる境界: naturalHeight が段階的に減少 → s が増加 → f がジャンプ増加
-    ///   よって二分探索が有効。
-    ///
-    /// 収束後の virtualWidth でレンダリングし、実際の描画高さでスケールを再計算
-    /// することで、近似ヘッダー高さの誤差（±2pt程度）を吸収する。
+    /// f(vw) = vw × (canvasHeight / naturalHeight(vw)) は単調非減少のため二分探索が有効。
     private func findOptimalVirtualWidth(canvasSize: CGSize) -> CGFloat {
-        // 上限：最多アイテム行が1行に収まる幅
         let maxItems = vm.rows.map { $0.items.count }.max() ?? 1
         let hiBase   = vm.defaultLabelSize.width
                      + CGFloat(max(maxItems, 1)) * (vm.defaultItemSize.width + 4)
@@ -334,7 +308,6 @@ struct TierExportSheet: View {
             let mid      = (lo + hi) / 2
             let naturalH = computeNaturalHeight(virtualWidth: mid)
             let s        = canvasSize.height / naturalH
-            // mid × s がキャンバス幅を下回るなら → まだ幅が足りない
             if mid * s < canvasSize.width - 0.5 {
                 lo = mid
             } else {
