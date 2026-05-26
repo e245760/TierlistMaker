@@ -3,6 +3,11 @@ import SwiftUI
 struct TierItemView: View {
     let item: TierItem
 
+    // テキストアイテムのフォントをテーマから取得する。
+    // TierItemView は TierRowView・ItemPoolView・各プレビューなど
+    // 幅広い場所から呼ばれるため、Environment 経由で受け取る。
+    @Environment(\.tierTheme) private var tierTheme
+
     var body: some View {
         Group {
             if let fileName = item.imageFileName,
@@ -22,7 +27,8 @@ struct TierItemView: View {
                     )
             } else {
                 Text(item.label)
-                    .font(.system(size: item.textSize.fontSize, weight: .bold))
+                    // ← .system(size:weight:) から tierTheme.fontStyle.font(size:) に変更
+                    .font(tierTheme.fontStyle.font(size: item.textSize.fontSize))
                     .minimumScaleFactor(0.5)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
@@ -47,8 +53,6 @@ struct TierItemView: View {
 
     // MARK: - クロップ値の解決
 
-    /// containMode ON 時はスケール・オフセットを「グレーが出ない範囲」に丸めて返す。
-    /// OFF 時はそのまま返す。
     private func resolvedCrop(for uiImage: UIImage) -> (offsetX: CGFloat, offsetY: CGFloat, scale: CGFloat) {
         if item.cropContain {
             let clampedScale = max(1.0, item.cropScale)
@@ -61,10 +65,6 @@ struct TierItemView: View {
         }
     }
 
-    /// 画像のアスペクト比とスケールから、グレーが出ない最大正規化オフセットを計算する。
-    ///
-    /// scaledToFill 後の画像サイズを基準に、
-    /// scaleEffect(s) を適用した場合のはみ出し量から算出する。
     func maxAllowedOffset(for uiImage: UIImage, scale: CGFloat) -> (x: CGFloat, y: CGFloat) {
         let fW = item.itemSize.width
         let fH = item.itemSize.height
@@ -72,26 +72,20 @@ struct TierItemView: View {
         let imgH = uiImage.size.height
         guard imgH > 0, fW > 0, fH > 0 else { return (0, 0) }
 
-        // scaledToFill 後のサイズ（フレームを完全に覆う最小サイズ）
         let imgAspect = imgW / imgH
         let frameAspect = fW / fH
         let fillW: CGFloat
         let fillH: CGFloat
         if imgAspect > frameAspect {
-            // 横長画像 → 高さに合わせて幅が余る
             fillH = fH
             fillW = imgAspect * fH
         } else {
-            // 縦長画像 → 幅に合わせて高さが余る
             fillW = fW
             fillH = fW / imgAspect
         }
 
-        // scaleEffect(s) 後のサイズ
         let scaledW = scale * fillW
         let scaledH = scale * fillH
-
-        // 各方向のはみ出し量（ピクセル）→ 正規化
         let maxPxX = (scaledW - fW) / 2.0
         let maxPxY = (scaledH - fH) / 2.0
         return (

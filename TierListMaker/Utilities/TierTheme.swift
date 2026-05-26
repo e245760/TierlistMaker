@@ -6,10 +6,10 @@ import SwiftUI
 //
 // ── テーマを追加するには ──
 //   1. enum に case を追加する（例: case ocean = "ocean"）
-//   2. 下記の各プロパティに case を追加して色・外観を定義する
+//   2. 下記の各プロパティに case を追加して色・フォント・模様を定義する
 //   3. TableEditSheet の ForEach が自動で新しい選択肢を表示する（allCases のため）
 //
-// それ以外のファイルは一切触らなくてよい。
+//   それ以外のファイルは一切触らなくてよい。
 
 enum TierTheme: String, CaseIterable, Codable {
     case classic = "classic"
@@ -25,8 +25,6 @@ enum TierTheme: String, CaseIterable, Codable {
         switch self {
         case .classic: return "クラシック"
         case .dark:    return "ダーク"
-        // case .ocean:   return "オーシャン"
-        // case .forest:  return "フォレスト"
         }
     }
 
@@ -34,37 +32,26 @@ enum TierTheme: String, CaseIterable, Codable {
         switch self {
         case .classic: return "sun.max"
         case .dark:    return "moon.stars"
-        // case .ocean:   return "water.waves"
-        // case .forest:  return "leaf"
         }
     }
 
     // MARK: - ColorScheme
     // テーマが要求する light / dark モード
-    // カスタムテーマは .light か .dark のどちらかをベースにする
 
     var colorScheme: ColorScheme {
         switch self {
         case .classic: return .light
         case .dark:    return .dark
-        // case .ocean:   return .dark
-        // case .forest:  return .light
         }
     }
 
-    // MARK: - 表のビジュアルカラー
-    // ここにテーマ固有の色を定義する。
-    // システムカラー（Color(.systemGray6) など）はcolorSchemeに追従するため、
-    // light/dark の切り替えだけなら systemColor で十分。
-    // 独自の色を使いたい場合は Color(hex: "...") で直接指定する。
+    // MARK: - 背景色
 
     /// ティア行のアイテムエリア背景
     var rowBackground: Color {
         switch self {
         case .classic: return Color(.systemGray6)
         case .dark:    return Color(.systemGray6)
-        // case .ocean:   return Color(hex: "#0D2137")
-        // case .forest:  return Color(hex: "#1E2D1F")
         }
     }
 
@@ -73,8 +60,6 @@ enum TierTheme: String, CaseIterable, Codable {
         switch self {
         case .classic: return Color(.systemBackground)
         case .dark:    return Color(.systemBackground)
-        // case .ocean:   return Color(hex: "#0A1929")
-        // case .forest:  return Color(hex: "#131A14")
         }
     }
 
@@ -83,15 +68,52 @@ enum TierTheme: String, CaseIterable, Codable {
         switch self {
         case .classic: return .blue
         case .dark:    return .blue
-        // case .ocean:   return Color(hex: "#00B4D8")
-        // case .forest:  return Color(hex: "#52B788")
+        }
+    }
+
+    // MARK: - フォント
+    //
+    // ラベルテキスト・テキストアイテムに適用するフォントスタイル。
+    // TierFontStyle.font(size:) を呼び出して Font を生成する。
+
+    var fontStyle: TierFontStyle {
+        switch self {
+        case .classic: return .system
+        case .dark:    return .system
+        // case .ocean:   return .rounded
+        // case .forest:  return .serif
+        // case .sakura:  return .rounded
+        }
+    }
+
+    // MARK: - 背景模様
+    //
+    // アイテムエリア背景（rowBackground）に重ねて描画する模様。
+    // TierPatternView がこの値を使って Canvas レンダリングする。
+
+    var rowPattern: TierRowPattern {
+        switch self {
+        case .classic: return .none
+        case .dark:    return .none
+        // case .ocean:   return .dots
+        // case .forest:  return .stripe
+        // case .sakura:  return .diagonal
+        }
+    }
+
+    /// 模様の描画色（rowBackground に対して見える程度の不透明度で指定する）
+    var patternColor: Color {
+        switch self {
+        case .classic: return Color(.label).opacity(0.06)
+        case .dark:    return Color(.label).opacity(0.06)
+        // case .ocean:   return Color(hex: "#FFFFFF").opacity(0.07)
+        // case .forest:  return Color(hex: "#FFFFFF").opacity(0.08)
+        // case .sakura:  return Color(hex: "#FF2D55").opacity(0.08)
         }
     }
 }
 
 // MARK: - EnvironmentKey
-// 表テーマを Environment 経由で子Viewに配る
-// TierRowView・ItemPoolView などで @Environment(\.tierTheme) として参照する
 
 private struct TierThemeKey: EnvironmentKey {
     static let defaultValue: TierTheme = .classic

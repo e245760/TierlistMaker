@@ -39,17 +39,9 @@ struct TierRowView: View {
     private var effectiveItemSize: ItemSize { vm.defaultItemSize }
 
     // MARK: - Color キャッシュ
-    // body 内で同じ Color(hex:) を何度も呼ぶ代わりに1回だけ生成して使い回す。
-    // row が変化すると body が再描画されるため、値は常に最新になる。
     private var labelColor: Color { Color(hex: row.color) }
     private var textColor:  Color { Color(hex: row.textColorHex) }
 
-    // MARK: - 高さ状態
-    //
-    // GeometryReader 内の LazyVGrid が確定した高さを
-    // RowContentHeightKey 経由で受け取り保持する。
-    // onPreferenceChange はレイアウト完了後に発火するため、
-    // レイアウトパス中の @State 書き換えによるループリスクがない。
     @State private var computedHeight: CGFloat = 70
 
     var body: some View {
@@ -98,16 +90,23 @@ struct TierRowView: View {
                         height: calculatedHeight,
                         alignment: .leading
                     )
-                    // calculatedHeight を PreferenceKey 経由で外側に伝える。
-                    // レイアウトパス中の @State 直接書き換えを避けるための正規手順。
                     .preference(key: RowContentHeightKey.self, value: calculatedHeight)
                 }
                 .frame(minHeight: computedHeight)
-                // レイアウト完了後に発火するため onChange/onAppear よりループリスクが低い。
                 .onPreferenceChange(RowContentHeightKey.self) { computedHeight = $0 }
-                .background(
-                    isHovered ? Color.blue.opacity(0.15) : tierTheme.rowBackground
-                )
+                // ── 背景：単色 ＋ 模様を ZStack で重ねる ──
+                .background {
+                    ZStack {
+                        isHovered ? Color.blue.opacity(0.15) : tierTheme.rowBackground
+                        // ホバー中は模様を非表示（視認性のため）
+                        if !isHovered {
+                            TierPatternView(
+                                pattern: tierTheme.rowPattern,
+                                color: tierTheme.patternColor
+                            )
+                        }
+                    }
+                }
                 .animation(.easeInOut(duration: 0.15), value: isHovered)
                 .onDrop(of: [.text], isTargeted: nil) { _ in false }
             }
@@ -146,15 +145,17 @@ struct TierRowView: View {
     }
 
     // MARK: - ラベルView
+    //
+    // フォントを tierTheme.fontStyle.font(size:) から取得する。
 
     private var tierLabel: some View {
         Text(row.tierName)
-            .font(.system(size: effectiveTextSize.fontSize, weight: .bold))
+            .font(tierTheme.fontStyle.font(size: effectiveTextSize.fontSize))
             .minimumScaleFactor(0.5)
             .lineLimit(1)
             .frame(width: effectiveLabelSize.width)
             .frame(maxHeight: .infinity)
-            .background(labelColor)   // ← キャッシュ済み
+            .background(labelColor)
             .foregroundColor(textColor)
             .onTapGesture(count: 2) { showEditSheet = true }
             .contextMenu {
@@ -174,12 +175,12 @@ struct TierRowView: View {
     private var previewContent: some View {
         HStack(spacing: 0) {
             Text(row.tierName)
-                .font(.system(size: effectiveTextSize.fontSize, weight: .bold))
+                .font(tierTheme.fontStyle.font(size: effectiveTextSize.fontSize))
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .frame(width: effectiveLabelSize.width)
                 .frame(maxHeight: .infinity)
-                .background(labelColor)   // ← キャッシュ済み
+                .background(labelColor)
                 .foregroundColor(textColor)
             LazyHStack(spacing: 4) {
                 ForEach(row.items) { item in
@@ -188,7 +189,16 @@ struct TierRowView: View {
             }
             .padding(4)
             .frame(maxWidth: .infinity, minHeight: 70)
-            .background(tierTheme.rowBackground)
+            // ContextMenu Preview も模様を反映
+            .background {
+                ZStack {
+                    tierTheme.rowBackground
+                    TierPatternView(
+                        pattern: tierTheme.rowPattern,
+                        color: tierTheme.patternColor
+                    )
+                }
+            }
         }
         .frame(width: UIScreen.main.bounds.width, height: 70)
     }

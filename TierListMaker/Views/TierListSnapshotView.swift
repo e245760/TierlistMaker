@@ -80,9 +80,9 @@ struct TierListSnapshotView: View {
         }
 
         // 反復配分
-        var pendingIds     = Set(rows.map { $0.id })
+        var pendingIds      = Set(rows.map { $0.id })
         var remainingBudget = available
-        var result         = [UUID: CGFloat]()
+        var result          = [UUID: CGFloat]()
 
         while !pendingIds.isEmpty {
             let share       = remainingBudget / CGFloat(pendingIds.count)
@@ -135,7 +135,10 @@ struct TierListSnapshotView: View {
         }
         .frame(width: canvasWidth)
         .background(tierTheme.rowBackground)
+        // テーマに合わせた colorScheme・tierTheme を子ビューへ配る
+        // TierItemView が @Environment(\.tierTheme) でフォントを参照するため必要
         .environment(\.colorScheme, tierTheme.colorScheme)
+        .environment(\.tierTheme, tierTheme)
     }
 
     // MARK: - 行ビュー
@@ -148,8 +151,9 @@ struct TierListSnapshotView: View {
 
         HStack(spacing: 0) {
             // ラベル
+            // ← .system(size:weight:) から tierTheme.fontStyle.font(size:) に変更
             Text(row.tierName)
-                .font(.system(size: defaultLabelTextSize.fontSize, weight: .bold))
+                .font(tierTheme.fontStyle.font(size: defaultLabelTextSize.fontSize))
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
                 .frame(width: defaultLabelSize.width, height: rowH)
@@ -173,7 +177,16 @@ struct TierListSnapshotView: View {
             }
             .padding(4)
             .frame(width: itemAreaWidth, height: rowH, alignment: .topLeading)
-            .background(tierTheme.rowBackground)
+            // ── 背景：単色 ＋ 模様を ZStack で重ねる ──
+            .background {
+                ZStack {
+                    tierTheme.rowBackground
+                    TierPatternView(
+                        pattern: tierTheme.rowPattern,
+                        color: tierTheme.patternColor
+                    )
+                }
+            }
         }
         .frame(width: canvasWidth)
     }
