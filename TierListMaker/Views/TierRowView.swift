@@ -1,20 +1,6 @@
 import SwiftUI
 internal import UniformTypeIdentifiers
 
-// MARK: - PreferenceKey
-//
-// GeometryReader が計算した行の高さを親ビューへ伝えるためのキー。
-// preference(key:value:) → onPreferenceChange の流れを使うことで、
-// レイアウトパス中に @State を直接書き換える onChange/onAppear パターンの
-// ループリスクを回避する。
-
-private struct RowContentHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 70
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 struct TierRowView: View {
 
     let rowId: UUID
@@ -42,73 +28,11 @@ struct TierRowView: View {
     private var labelColor: Color { Color(hex: row.color) }
     private var textColor:  Color { Color(hex: row.textColorHex) }
 
-    @State private var computedHeight: CGFloat = 70
-
     var body: some View {
         ZStack(alignment: .trailing) {
             HStack(spacing: 0) {
                 tierLabel
-
-                GeometryReader { areaGeo in
-                    let availableWidth = areaGeo.size.width - 8
-                    let itemW = effectiveItemSize.width + 4
-                    let cols = max(1, Int(availableWidth / itemW))
-                    let rowCount = max(
-                        1,
-                        Int(ceil(Double(row.items.count) / Double(cols)))
-                    )
-                    let itemH = effectiveItemSize.height + 4
-                    let calculatedHeight = max(70, CGFloat(rowCount) * itemH + 8)
-                    let columns = Array(
-                        repeating: GridItem(.fixed(effectiveItemSize.width), spacing: 4),
-                        count: cols
-                    )
-
-                    LazyVGrid(columns: columns, spacing: 4) {
-                        ForEach(row.items) { item in
-                            DraggableTierItem(
-                                item: item,
-                                vm: vm,
-                                rowFrames: rowFrames,
-                                onTap: {
-                                    withAnimation(.spring()) { dragSel.selectedItem = item }
-                                },
-                                dragPos: dragPos,
-                                dragSel: dragSel,
-                                trayFrame: trayFrame
-                            )
-                            .opacity(dragSel.selectedItem?.id == item.id ? 0.3 : 1.0)
-                            .frame(
-                                width: effectiveItemSize.width,
-                                height: effectiveItemSize.height
-                            )
-                        }
-                    }
-                    .padding(4)
-                    .frame(
-                        width: areaGeo.size.width,
-                        height: calculatedHeight,
-                        alignment: .leading
-                    )
-                    .preference(key: RowContentHeightKey.self, value: calculatedHeight)
-                }
-                .frame(minHeight: computedHeight)
-                .onPreferenceChange(RowContentHeightKey.self) { computedHeight = $0 }
-                // ── 背景：単色 ＋ 模様を ZStack で重ねる ──
-                .background {
-                    ZStack {
-                        isHovered ? Color.blue.opacity(0.15) : tierTheme.rowBackground
-                        // ホバー中は模様を非表示（視認性のため）
-                        if !isHovered {
-                            TierPatternView(
-                                pattern: tierTheme.rowPattern,
-                                color: tierTheme.patternColor
-                            )
-                        }
-                    }
-                }
-                .animation(.easeInOut(duration: 0.15), value: isHovered)
-                .onDrop(of: [.text], isTargeted: nil) { _ in false }
+                itemsArea
             }
 
             if dragSel.selectedItem != nil {
@@ -144,9 +68,64 @@ struct TierRowView: View {
         }
     }
 
-    // MARK: - ラベルView
+    // MARK: - アイテムエリア
     //
-    // フォントを tierTheme.fontStyle.font(size:) から取得する。
+    // GeometryReader をレイアウトコンテナとして使うと、
+    // 視覚的な描画位置と SwiftUI のヒットテスト領域がずれる問題が発生する。
+    //
+    // 修正：.adaptive グリッドに切り替えることで LazyVGrid が
+    // 自分のサイズを正確に自己報告するようにし、GeometryReader を排除。
+    // min == max == itemWidth なので列幅は .fixed と同じく固定値になる。
+
+    private var itemsArea: some View {
+        let columns = [
+            GridItem(
+                .adaptive(
+                    minimum: effectiveItemSize.width,
+                    maximum: effectiveItemSize.width
+                ),
+                spacing: 4
+            )
+        ]
+
+        return LazyVGrid(columns: columns, spacing: 4) {
+            ForEach(row.items) { item in
+                DraggableTierItem(
+                    item: item,
+                    vm: vm,
+                    rowFrames: rowFrames,
+                    onTap: {
+                        withAnimation(.spring()) { dragSel.selectedItem = item }
+                    },
+                    dragPos: dragPos,
+                    dragSel: dragSel,
+                    trayFrame: trayFrame
+                )
+                .opacity(dragSel.selectedItem?.id == item.id ? 0.3 : 1.0)
+                .frame(
+                    width: effectiveItemSize.width,
+                    height: effectiveItemSize.height
+                )
+            }
+        }
+        .padding(4)
+        .frame(maxWidth: .infinity, minHeight: 70, alignment: .topLeading)
+        .background {
+            ZStack {
+                isHovered ? Color.blue.opacity(0.15) : tierTheme.rowBackground
+                if !isHovered {
+                    TierPatternView(
+                        pattern: tierTheme.rowPattern,
+                        color: tierTheme.patternColor
+                    )
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .onDrop(of: [.text], isTargeted: nil) { _ in false }
+    }
+
+    // MARK: - ラベルView
 
     private var tierLabel: some View {
         Text(row.tierName)
@@ -189,7 +168,6 @@ struct TierRowView: View {
             }
             .padding(4)
             .frame(maxWidth: .infinity, minHeight: 70)
-            // ContextMenu Preview も模様を反映
             .background {
                 ZStack {
                     tierTheme.rowBackground
