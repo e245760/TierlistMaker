@@ -114,12 +114,30 @@ struct TierListSnapshotView: View {
 
         return VStack(spacing: 0) {
             // タイトルヘッダー
-            Text(title)
-                .font(.subheadline.bold())
-                .foregroundColor(.primary)
-                .padding(.vertical, 10)
-                .frame(width: canvasWidth)
-                .background(Color(.systemGray5))
+            // ── ZStack でタイトル中央固定・ロゴ右端配置 ──
+            // タイトルは frame(maxWidth: .infinity) で中央に留まり、
+            // ロゴは HStack の Spacer で右端に押し出される。
+            // ロゴ画像が Assets に存在しない場合は自動的にタイトルのみ表示。
+            ZStack {
+                // タイトル（中央固定）
+                Text(title)
+                    .font(.subheadline.bold())
+                    .foregroundColor(.primary)
+
+                // ロゴ（右端）
+                // "AppLogo" は Assets に登録した横長ロゴ画像名に合わせて変更する
+                HStack {
+                    Spacer()
+                    Image("AppLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 35)  // ヘッダー高さ（≈35pt）に収まる範囲で調整
+                        .padding(.trailing, 10)
+                }
+            }
+            .padding(.vertical, 10)
+            .frame(width: canvasWidth)
+            .background(Color(.systemGray5))
 
             Rectangle()
                 .fill(Color.gray.opacity(0.4))
