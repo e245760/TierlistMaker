@@ -55,12 +55,17 @@ struct TierExportSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    // Pro判定（ウォーターマークトグルの表示制御に使用）
+    @ObservedObject private var pm = PurchaseManager.shared
+
     @State private var selectedRatio: ExportAspectRatio = .square
     @State private var renderedImage: UIImage? = nil
     @State private var isRendering = true
     @State private var isSaving    = false
     @State private var savedOK     = false
     @State private var showPermissionAlert = false
+    /// Pro購入済みユーザーのみ切り替え可能。無料ユーザーは常に true（表示）。
+    @State private var showWatermark: Bool = true
 
     var body: some View {
         NavigationStack {
@@ -84,7 +89,8 @@ struct TierExportSheet: View {
             }
         }
         .task { await renderImage() }
-        .onChange(of: selectedRatio) { _ in Task { await renderImage() } }
+        .onChange(of: selectedRatio)   { _ in Task { await renderImage() } }
+        .onChange(of: showWatermark)   { _ in Task { await renderImage() } }
         .alert("写真へのアクセスを許可してください", isPresented: $showPermissionAlert) {
             Button("設定を開く") {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
@@ -157,6 +163,11 @@ struct TierExportSheet: View {
                 .padding(.top, 16)
                 .padding(.bottom, 12)
 
+                // ── ウォーターマーク切り替え（Pro限定） ──
+                watermarkToggleRow
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 12)
+
                 Button {
                     Task { await requestAndSave() }
                 } label: {
@@ -188,6 +199,66 @@ struct TierExportSheet: View {
         if isSaving { return "保存中…" }
         if savedOK  { return "保存しました" }
         return "写真アプリに保存（PNG）"
+    }
+
+    // MARK: - ウォーターマーク切り替え行
+
+    /// Pro購入済み: トグルスイッチで ON/OFF を切り替え可能。
+    /// 非Pro         : ロックバッジを表示し、タップで何もしない（常に ON）。
+    @State private var showPaywall = false
+
+    @ViewBuilder
+    private var watermarkToggleRow: some View {
+        HStack(spacing: 12) {
+            // アイコン＋ラベル
+            Image(systemName: showWatermark ? "star.fill" : "star.slash")
+                .font(.subheadline)
+                .foregroundColor(showWatermark ? .blue : .secondary)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("ロゴ")
+                    .font(.subheadline.bold())
+                    .foregroundColor(.primary)
+                Text(pm.isPro
+                     ? (showWatermark ? "画像に表示されます" : "画像に表示されません")
+                     : "プロにアップグレードすると非表示にできます")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            if pm.isPro {
+                Toggle("", isOn: $showWatermark)
+                    .labelsHidden()
+                    .tint(.blue)
+            } else {
+                // 非Pro: タップでペイウォールを開く
+                Button {
+                    showPaywall = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "lock.fill")
+                            .font(.caption.bold())
+                        Text("Pro")
+                            .font(.caption.bold())
+                    }
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Color.orange.opacity(0.12))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .sheet(isPresented: $showPaywall) {
+            PaywallSheet(pm: pm)
+        }
     }
 
     // MARK: - Render
@@ -262,7 +333,8 @@ struct TierExportSheet: View {
             defaultItemSize: vm.defaultItemSize,
             tierTheme: vm.tierTheme,
             canvasWidth: canvasWidth,
-            targetHeight: targetHeight
+            targetHeight: targetHeight,
+            showWatermark: showWatermark
         )
         let renderer = ImageRenderer(content: snapshot)
         renderer.scale = scale

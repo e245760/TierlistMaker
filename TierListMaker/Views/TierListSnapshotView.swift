@@ -18,6 +18,7 @@ struct TierListSnapshotView: View {
     let tierTheme: TierTheme
     let canvasWidth: CGFloat
     let targetHeight: CGFloat?
+    let showWatermark: Bool
 
     init(
         rows: [TierRow],
@@ -27,7 +28,8 @@ struct TierListSnapshotView: View {
         defaultItemSize: ItemSize,
         tierTheme: TierTheme,
         canvasWidth: CGFloat = UIScreen.main.bounds.width,
-        targetHeight: CGFloat? = nil
+        targetHeight: CGFloat? = nil,
+        showWatermark: Bool = true
     ) {
         self.rows                 = rows
         self.title                = title
@@ -37,6 +39,7 @@ struct TierListSnapshotView: View {
         self.tierTheme            = tierTheme
         self.canvasWidth          = canvasWidth
         self.targetHeight         = targetHeight
+        self.showWatermark        = showWatermark
     }
 
     // MARK: - レイアウト計算
@@ -124,15 +127,17 @@ struct TierListSnapshotView: View {
                     .font(.subheadline.bold())
                     .foregroundColor(.primary)
 
-                // ロゴ（右端）
+                // ロゴ（右端）：showWatermark が true のときのみ表示
                 // "AppLogo" は Assets に登録した横長ロゴ画像名に合わせて変更する
-                HStack {
-                    Spacer()
-                    Image("AppLogo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 35)  // ヘッダー高さ（≈35pt）に収まる範囲で調整
-                        .padding(.trailing, 10)
+                if showWatermark {
+                    HStack {
+                        Spacer()
+                        Image("AppLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 35)  // ヘッダー高さ（≈35pt）に収まる範囲で調整
+                            .padding(.trailing, 10)
+                    }
                 }
             }
             .padding(.vertical, 10)
@@ -153,8 +158,6 @@ struct TierListSnapshotView: View {
         }
         .frame(width: canvasWidth)
         .background(tierTheme.rowBackground)
-        // テーマに合わせた colorScheme・tierTheme を子ビューへ配る
-        // TierItemView が @Environment(\.tierTheme) でフォントを参照するため必要
         .environment(\.colorScheme, tierTheme.colorScheme)
         .environment(\.tierTheme, tierTheme)
     }
