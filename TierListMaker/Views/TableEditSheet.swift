@@ -4,6 +4,10 @@ struct TableEditSheet: View {
     @ObservedObject var vm: TierListViewModel
     @Environment(\.dismiss) var dismiss
 
+    // Pro判定（テーマロック表示に使用）
+    @ObservedObject private var pm = PurchaseManager.shared
+    @State private var showPaywall = false
+
     @State private var editedLabelSize: LabelSize
     @State private var editedLabelTextSize: LabelTextSize
     @State private var editedItemSize: ItemSize
@@ -64,6 +68,7 @@ struct TableEditSheet: View {
                         .animation(.spring(), value: editedItemSize)
                         .animation(.spring(), value: editedItemTextSize)
                         .environment(\.colorScheme, editedTierTheme.colorScheme)
+                        .environment(\.tierTheme, editedTierTheme)
                     }
                     .padding(.vertical, 16)
                 }
@@ -73,33 +78,13 @@ struct TableEditSheet: View {
 
                     // ── この表のテーマ ──
                     Section("この表のテーマ") {
-                        // TierTheme.allCases を使うため、テーマを追加するとここが自動で更新される
                         let columns = Array(
                             repeating: GridItem(.flexible(), spacing: 10),
                             count: min(TierTheme.allCases.count, 3)
                         )
                         LazyVGrid(columns: columns, spacing: 10) {
                             ForEach(TierTheme.allCases, id: \.self) { theme in
-                                let isSelected = editedTierTheme == theme
-                                Button {
-                                    withAnimation(.spring()) { editedTierTheme = theme }
-                                } label: {
-                                    VStack(spacing: 6) {
-                                        Image(systemName: theme.icon)
-                                            .font(.title2)
-                                            .foregroundColor(isSelected ? .white : .primary)
-                                        Text(theme.displayName)
-                                            .font(.caption.bold())
-                                            .foregroundColor(isSelected ? .white : .primary)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .fill(isSelected ? Color.blue : Color(.systemGray5))
-                                    )
-                                }
-                                .buttonStyle(.plain)
+                                themeButton(theme)
                             }
                         }
                         .padding(.vertical, 4)
@@ -242,6 +227,69 @@ struct TableEditSheet: View {
                     .bold()
                 }
             }
+            .sheet(isPresented: $showPaywall) {
+                PaywallSheet(pm: pm)
+            }
         }
+    }
+
+    // MARK: - テーマボタン
+    //
+    // isPro テーマかつ未購入の場合：
+    //   ・ボタン右上に南京錠＋「Pro」バッジを表示
+    //   ・タップでペイウォールを開く（テーマは変更しない）
+    // 購入済み or 無料テーマの場合：通常選択動作
+
+    @ViewBuilder
+    private func themeButton(_ theme: TierTheme) -> some View {
+        let isSelected = editedTierTheme == theme
+        let isLocked   = theme.isPro && !pm.isPro
+
+        Button {
+            if isLocked {
+                showPaywall = true
+            } else {
+                withAnimation(.spring()) { editedTierTheme = theme }
+            }
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                // ── ボタン本体 ──
+                VStack(spacing: 6) {
+                    Image(systemName: theme.icon)
+                        .font(.title2)
+                        .foregroundColor(
+                            isSelected ? .white : (isLocked ? Color(.tertiaryLabel) : .primary)
+                        )
+                    Text(theme.displayName)
+                        .font(.caption.bold())
+                        .foregroundColor(
+                            isSelected ? .white : (isLocked ? Color(.tertiaryLabel) : .primary)
+                        )
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(isSelected ? Color.blue : Color(.systemGray5))
+                )
+
+                // ── Pro バッジ（ロック中のみ） ──
+                if isLocked {
+                    HStack(spacing: 2) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 8, weight: .bold))
+                        Text("Pro")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 3)
+                    .background(Color.orange.opacity(0.15))
+                    .clipShape(Capsule())
+                    .padding(5)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }

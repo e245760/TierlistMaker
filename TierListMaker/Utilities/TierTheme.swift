@@ -6,18 +6,28 @@ import SwiftUI
 //
 // ── テーマを追加するには ──
 //   1. enum に case を追加する（例: case ocean = "ocean"）
-//   2. 下記の各プロパティに case を追加して色・フォント・模様を定義する
-//   3. TableEditSheet の ForEach が自動で新しい選択肢を表示する（allCases のため）
+//   2. isPro に case を追加して無料/Pro を設定する
+//   3. 下記の各プロパティに case を追加して色・フォント・模様を定義する
+//   4. TableEditSheet の ForEach が自動で新しい選択肢を表示する（allCases のため）
 //
 //   それ以外のファイルは一切触らなくてよい。
 
 enum TierTheme: String, CaseIterable, Codable {
     case classic = "classic"
     case dark    = "dark"
-    // ── 追加例（コメントを外してプロパティに case を足すだけ）──
-    // case ocean  = "ocean"
-    // case forest = "forest"
-    // case sakura = "sakura"
+    case ocean   = "ocean"   // Pro限定
+    case sunset  = "sunset"  // Pro限定
+    case forest  = "forest"  // Pro限定
+
+    // MARK: - Pro限定フラグ
+
+    /// true のテーマは PurchaseManager.isPro が false のとき選択不可
+    var isPro: Bool {
+        switch self {
+        case .classic, .dark:          return false
+        case .ocean, .sunset, .forest: return true
+        }
+    }
 
     // MARK: - UI表示
 
@@ -25,6 +35,9 @@ enum TierTheme: String, CaseIterable, Codable {
         switch self {
         case .classic: return "クラシック"
         case .dark:    return "ダーク"
+        case .ocean:   return "オーシャン"
+        case .sunset:  return "サンセット"
+        case .forest:  return "フォレスト"
         }
     }
 
@@ -32,6 +45,9 @@ enum TierTheme: String, CaseIterable, Codable {
         switch self {
         case .classic: return "sun.max"
         case .dark:    return "moon.stars"
+        case .ocean:   return "water.waves"
+        case .sunset:  return "sunset.fill"
+        case .forest:  return "leaf.fill"
         }
     }
 
@@ -40,8 +56,8 @@ enum TierTheme: String, CaseIterable, Codable {
 
     var colorScheme: ColorScheme {
         switch self {
-        case .classic: return .light
-        case .dark:    return .dark
+        case .classic, .ocean, .sunset, .forest: return .light
+        case .dark:                              return .dark
         }
     }
 
@@ -52,6 +68,9 @@ enum TierTheme: String, CaseIterable, Codable {
         switch self {
         case .classic: return Color(.systemGray6)
         case .dark:    return Color(.systemGray6)
+        case .ocean:   return Color(hex: "#DDF0FB")
+        case .sunset:  return Color(hex: "#FFF0E6")
+        case .forest:  return Color(hex: "#E4F4E2")
         }
     }
 
@@ -60,6 +79,9 @@ enum TierTheme: String, CaseIterable, Codable {
         switch self {
         case .classic: return Color(.systemBackground)
         case .dark:    return Color(.systemBackground)
+        case .ocean:   return Color(hex: "#F0F8FF")
+        case .sunset:  return Color(hex: "#FFF8F2")
+        case .forest:  return Color(hex: "#F2FAF1")
         }
     }
 
@@ -68,6 +90,9 @@ enum TierTheme: String, CaseIterable, Codable {
         switch self {
         case .classic: return .blue
         case .dark:    return .blue
+        case .ocean:   return Color(hex: "#0077B6")
+        case .sunset:  return Color(hex: "#E8600A")
+        case .forest:  return Color(hex: "#2D6A2D")
         }
     }
 
@@ -80,9 +105,9 @@ enum TierTheme: String, CaseIterable, Codable {
         switch self {
         case .classic: return .system
         case .dark:    return .system
-        // case .ocean:   return .rounded
-        // case .forest:  return .serif
-        // case .sakura:  return .rounded
+        case .ocean:   return .rounded
+        case .sunset:  return .rounded
+        case .forest:  return .serif
         }
     }
 
@@ -95,9 +120,9 @@ enum TierTheme: String, CaseIterable, Codable {
         switch self {
         case .classic: return .none
         case .dark:    return .none
-        // case .ocean:   return .dots
-        // case .forest:  return .stripe
-        // case .sakura:  return .diagonal
+        case .ocean:   return .dots
+        case .sunset:  return .none
+        case .forest:  return .stripe
         }
     }
 
@@ -106,9 +131,9 @@ enum TierTheme: String, CaseIterable, Codable {
         switch self {
         case .classic: return Color(.label).opacity(0.06)
         case .dark:    return Color(.label).opacity(0.06)
-        // case .ocean:   return Color(hex: "#FFFFFF").opacity(0.07)
-        // case .forest:  return Color(hex: "#FFFFFF").opacity(0.08)
-        // case .sakura:  return Color(hex: "#FF2D55").opacity(0.08)
+        case .ocean:   return Color(hex: "#0077B6").opacity(0.10)
+        case .sunset:  return Color(hex: "#E8600A").opacity(0.07)
+        case .forest:  return Color(hex: "#2D6A2D").opacity(0.10)
         }
     }
 }
