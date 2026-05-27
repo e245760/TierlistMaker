@@ -60,29 +60,48 @@ class TierListViewModel: ObservableObject {
 
     /// アイテムサイズを一括変更する。
     /// サイズが変わると画像クロップの基準が変わるため、クロップ設定は無条件でリセットする。
+    ///
+    /// ── @Published 連続発火の抑制 ──
+    /// subscript 経由で要素を1件ずつ書き換えると、配列プロパティの willSet（＝
+    /// objectWillChange.send()）がアイテム数分だけ呼ばれ、Copy-on-Write の
+    /// 配列コピーも繰り返し発生する。
+    /// map で新配列をローカル構築してから一括代入することで、
+    /// @Published 通知と COW コピーをそれぞれ1回に抑える。
     func applyItemSizeToAll(_ size: ItemSize) {
         defaultItemSize = size
-        for i in pool.indices {
-            pool[i].itemSize    = size
-            pool[i].cropOffsetX = 0
-            pool[i].cropOffsetY = 0
-            pool[i].cropScale   = 1.0
+
+        pool = pool.map { item in
+            var i         = item
+            i.itemSize    = size
+            i.cropOffsetX = 0
+            i.cropOffsetY = 0
+            i.cropScale   = 1.0
+            return i
         }
-        for i in rows.indices {
-            for j in rows[i].items.indices {
-                rows[i].items[j].itemSize    = size
-                rows[i].items[j].cropOffsetX = 0
-                rows[i].items[j].cropOffsetY = 0
-                rows[i].items[j].cropScale   = 1.0
+
+        rows = rows.map { row in
+            var r   = row
+            r.items = row.items.map { item in
+                var i         = item
+                i.itemSize    = size
+                i.cropOffsetX = 0
+                i.cropOffsetY = 0
+                i.cropScale   = 1.0
+                return i
             }
+            return r
         }
     }
 
     func applyItemTextSizeToAll(_ size: ItemTextSize) {
         defaultItemTextSize = size
-        for i in pool.indices { pool[i].textSize = size }
-        for i in rows.indices {
-            for j in rows[i].items.indices { rows[i].items[j].textSize = size }
+
+        pool = pool.map { var i = $0; i.textSize = size; return i }
+
+        rows = rows.map { row in
+            var r   = row
+            r.items = row.items.map { var i = $0; i.textSize = size; return i }
+            return r
         }
     }
     

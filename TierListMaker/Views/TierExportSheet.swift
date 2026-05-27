@@ -262,6 +262,25 @@ struct TierExportSheet: View {
     }
 
     // MARK: - Render
+    //
+    // ── スレッド戦略 ──
+    //
+    // ImageRenderer は @MainActor が必要なため render() は常にメインスレッドで動く。
+    // 一方、二分探索（findOptimalVirtualWidth）と合成描画（UIGraphicsImageRenderer）は
+    // メインスレッドを必要としないため Task.detached でバックグラウンドに退避する。
+    //
+    //  [メイン]  isRendering = true
+    //  [メイン]  Phase1: render（プローブ） ← ImageRenderer なので必須
+    //  [メイン]  Task.yield() → UIに描画の機会を与える
+    //  ┌─────────────────────────────────────────────────────────────┐
+    //  │ ケースA                         │ ケースB                   │
+    //  │ [メイン] render（引き伸ばし）    │ [BG] findOptimalVW (計算) │
+    //  │                                 │ [メイン] Task.yield()      │
+    //  │                                 │ [メイン] render（展開）    │
+    //  │                                 │ [BG] 合成描画              │
+    //  └─────────────────────────────────────────────────────────────┘
+    //  [メイン]  renderedImage = finalImage
+    //  [メイン]  isRendering = false
 
     @MainActor
     private func renderImage() async {
@@ -272,25 +291,49 @@ struct TierExportSheet: View {
         let screenWidth = UIScreen.main.bounds.width
         let canvasSize  = selectedRatio.canvasSize(for: screenWidth)
 
-        // Phase 1: 正確な自然高さを計測
+        // Phase 1: 正確な自然高さを計測（ImageRenderer なのでメインスレッド必須）
         guard let probeImage = render(canvasWidth: canvasSize.width,
                                       targetHeight: nil,
                                       scale: scale) else {
             isRendering = false
             return
         }
+
+        // プローブ直後にメインスレッドを一度手放し、UIの描画をブロックしない
+        await Task.yield()
+
         let naturalHeight = probeImage.size.height
+        let finalImage: UIImage?
 
         if naturalHeight <= canvasSize.height {
             // ── ケース A: 行引き伸ばし ──
             // TierListSnapshotView 内の反復アルゴリズムが各行の高さを正しく配分する
-            renderedImage = render(canvasWidth: canvasSize.width,
-                                   targetHeight: canvasSize.height,
-                                   scale: scale)
+            finalImage = render(canvasWidth: canvasSize.width,
+                                targetHeight: canvasSize.height,
+                                scale: scale)
 
         } else {
             // ── ケース B: 仮想幅グリッド再計算 ──
-            let virtualWidth = findOptimalVirtualWidth(canvasSize: canvasSize)
+
+            // vm のプロパティを値型（struct / enum）としてキャプチャ。
+            // 構造体コピーなので Task.detached に渡しても Sendable 安全。
+            let rows      = vm.rows
+            let labelSize = vm.defaultLabelSize
+            let itemSize  = vm.defaultItemSize
+
+            // 64回ループの二分探索をバックグラウンドで実行。
+            // await で main thread は解放され、UI イベントを処理できる。
+            let virtualWidth = await Task.detached(priority: .userInitiated) {
+                Self.findOptimalVirtualWidth(
+                    canvasSize: canvasSize,
+                    rows: rows,
+                    defaultLabelSize: labelSize,
+                    defaultItemSize: itemSize
+                )
+            }.value
+
+            // バックグラウンドから戻ったあと、再び UI に息継ぎを与えてからレンダリング
+            await Task.yield()
 
             guard let expandedImage = render(canvasWidth: virtualWidth,
                                               targetHeight: nil,
@@ -301,24 +344,30 @@ struct TierExportSheet: View {
 
             // min(幅スケール, 高さスケール) で両方向の溢れを防ぐ
             // → drawX, drawY が必ず ≥ 0 になりクリッピングなし
-            let sW    = canvasSize.width  / expandedImage.size.width
-            let sH    = canvasSize.height / expandedImage.size.height
-            let s     = min(sW, sH)
-            let drawW = expandedImage.size.width  * s
-            let drawH = expandedImage.size.height * s
-            let drawX = (canvasSize.width  - drawW) / 2   // ≥ 0 保証
-            let drawY = (canvasSize.height - drawH) / 2   // ≥ 0 保証
+            //
+            // UIGraphicsImageRenderer は iOS 10+ でスレッドセーフ。
+            // 合成処理をバックグラウンドに退避することでメインスレッドのヒッチを防ぐ。
+            finalImage = await Task.detached(priority: .userInitiated) {
+                let sW    = canvasSize.width  / expandedImage.size.width
+                let sH    = canvasSize.height / expandedImage.size.height
+                let s     = min(sW, sH)
+                let drawW = expandedImage.size.width  * s
+                let drawH = expandedImage.size.height * s
+                let drawX = (canvasSize.width  - drawW) / 2   // ≥ 0 保証
+                let drawY = (canvasSize.height - drawH) / 2   // ≥ 0 保証
 
-            let format    = UIGraphicsImageRendererFormat()
-            format.opaque = false
-            format.scale  = scale
-            let uiRenderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
-            renderedImage  = uiRenderer.image { _ in
-                expandedImage.draw(in: CGRect(x: drawX, y: drawY, width: drawW, height: drawH))
-            }
+                let format    = UIGraphicsImageRendererFormat()
+                format.opaque = false
+                format.scale  = scale
+                let uiRenderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
+                return uiRenderer.image { _ in
+                    expandedImage.draw(in: CGRect(x: drawX, y: drawY, width: drawW, height: drawH))
+                }
+            }.value
         }
 
-        isRendering = false
+        renderedImage = finalImage
+        isRendering   = false
     }
 
     @MainActor
@@ -342,18 +391,28 @@ struct TierExportSheet: View {
     }
 
     // MARK: - Virtual Width Binary Search
+    //
+    // 2つのメソッドはどちらも純粋な計算処理のみを行う。
+    // @MainActor への依存をなくすため static 化し、
+    // vm のプロパティは呼び出し元が値型としてキャプチャして渡す。
+    // これにより Task.detached からスレッドセーフに呼び出せる。
 
     /// TierListSnapshotView の高さ計算を模倣し、指定幅での自然な高さを返す（近似）。
-    private func computeNaturalHeight(virtualWidth: CGFloat) -> CGFloat {
-        let itemH      = vm.defaultItemSize.height
-        let itemW      = vm.defaultItemSize.width
-        let labelW     = vm.defaultLabelSize.width
+    private static func computeNaturalHeight(
+        virtualWidth: CGFloat,
+        rows: [TierRow],
+        defaultLabelSize: LabelSize,
+        defaultItemSize: ItemSize
+    ) -> CGFloat {
+        let itemH      = defaultItemSize.height
+        let itemW      = defaultItemSize.width
+        let labelW     = defaultLabelSize.width
         let itemAreaW  = virtualWidth - labelW
         let perRow     = max(1, Int(itemAreaW / (itemW + 4)))
-        let headerH: CGFloat   = 36
-        let separators: CGFloat = CGFloat(vm.rows.count) * 0.5
+        let headerH: CGFloat    = 36
+        let separators: CGFloat = CGFloat(rows.count) * 0.5
 
-        let rowsH = vm.rows.reduce(CGFloat(0)) { acc, row in
+        let rowsH = rows.reduce(CGFloat(0)) { acc, row in
             let count  = row.items.count
             let chunks = count == 0 ? 0 : Int(ceil(Double(count) / Double(perRow)))
             let minH   = itemH + 8
@@ -367,10 +426,15 @@ struct TierExportSheet: View {
     /// 満たす最小の virtualWidth を二分探索で求める。
     ///
     /// f(vw) = vw × (canvasHeight / naturalHeight(vw)) は単調非減少のため二分探索が有効。
-    private func findOptimalVirtualWidth(canvasSize: CGSize) -> CGFloat {
-        let maxItems = vm.rows.map { $0.items.count }.max() ?? 1
-        let hiBase   = vm.defaultLabelSize.width
-                     + CGFloat(max(maxItems, 1)) * (vm.defaultItemSize.width + 4)
+    private static func findOptimalVirtualWidth(
+        canvasSize: CGSize,
+        rows: [TierRow],
+        defaultLabelSize: LabelSize,
+        defaultItemSize: ItemSize
+    ) -> CGFloat {
+        let maxItems = rows.map { $0.items.count }.max() ?? 1
+        let hiBase   = defaultLabelSize.width
+                     + CGFloat(max(maxItems, 1)) * (defaultItemSize.width + 4)
                      + 8
         var lo: CGFloat = canvasSize.width
         var hi: CGFloat = max(hiBase, canvasSize.width * 3)
@@ -378,8 +442,13 @@ struct TierExportSheet: View {
         for _ in 0..<64 {
             guard hi - lo > 0.25 else { break }
             let mid      = (lo + hi) / 2
-            let naturalH = computeNaturalHeight(virtualWidth: mid)
-            let s        = canvasSize.height / naturalH
+            let naturalH = computeNaturalHeight(
+                virtualWidth: mid,
+                rows: rows,
+                defaultLabelSize: defaultLabelSize,
+                defaultItemSize: defaultItemSize
+            )
+            let s = canvasSize.height / naturalH
             if mid * s < canvasSize.width - 0.5 {
                 lo = mid
             } else {
