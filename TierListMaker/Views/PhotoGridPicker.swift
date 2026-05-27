@@ -239,6 +239,12 @@ struct PhotoGridCell: View {
                     .padding(6)
             }
         }
+        // scaledToFill により ZStack のヒットテスト領域が
+        // フレーム外にはみ出し隣のセルのタップを横取りするのを防ぐ。
+        // frame でサイズを明示し、contentShape で判定範囲をセル内に限定する。
+        .frame(width: itemSize, height: itemSize)
+        .contentShape(Rectangle())
+        .clipped()
         .onAppear { loadImage() }
         .onDisappear { cancelRequest() }
     }
