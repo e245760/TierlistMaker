@@ -8,7 +8,7 @@ struct ItemPoolView: View {
     // DraggableTierItem に渡す参照として保持するだけなので、let で十分。
     let dragPos: DragPositionState
     let dragSel: DragInteractionState
-
+    let dragHover: DragHoverState
     let rowFrames: [UUID: CGRect]
     let trayFrame: CGRect
 
@@ -79,6 +79,7 @@ struct ItemPoolView: View {
                                     }
                                 },
                                 dragPos: dragPos,
+                                dragHover: dragHover,
                                 dragSel: dragSel,
                                 trayFrame: trayFrame
                             )

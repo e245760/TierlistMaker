@@ -24,6 +24,7 @@ private struct TierRowListView: View {
     @ObservedObject var vm: TierListViewModel
     let dragPos: DragPositionState
     let dragSel: DragInteractionState
+    let dragHover: DragHoverState
     let rowFrames: [UUID: CGRect]
     let trayFrame: CGRect
     let onRowFramesChanged: ([UUID: CGRect]) -> Void
@@ -38,6 +39,7 @@ private struct TierRowListView: View {
                             row: $row,
                             vm: vm,
                             dragPos: dragPos,
+                            dragHover: dragHover,
                             dragSel: dragSel,
                             rowFrames: rowFrames,
                             trayFrame: trayFrame
@@ -86,6 +88,7 @@ private struct ItemPoolOverlay: ViewModifier {
     @Binding var showPool: Bool
     let dragPos: DragPositionState
     let dragSel: DragInteractionState
+    let dragHover: DragHoverState
     let rowFrames: [UUID: CGRect]
     let trayFrame: CGRect
 
@@ -107,6 +110,7 @@ private struct ItemPoolOverlay: ViewModifier {
                         showPool: $showPool,
                         dragPos: dragPos,
                         dragSel: dragSel,
+                        dragHover: dragHover,
                         rowFrames: rowFrames,
                         trayFrame: trayFrame
                     )
@@ -125,6 +129,7 @@ private extension View {
         showPool: Binding<Bool>,
         dragPos: DragPositionState,
         dragSel: DragInteractionState,
+        dragHover: DragHoverState,
         rowFrames: [UUID: CGRect],
         trayFrame: CGRect
     ) -> some View {
@@ -133,6 +138,7 @@ private extension View {
             showPool: showPool,
             dragPos: dragPos,
             dragSel: dragSel,
+            dragHover: dragHover,
             rowFrames: rowFrames,
             trayFrame: trayFrame
         ))
@@ -214,6 +220,7 @@ struct TierEditView: View {
 
     @StateObject private var dragPos = DragPositionState()
     @StateObject private var dragSel = DragInteractionState()
+    @StateObject private var dragHover = DragHoverState()
 
     // MARK: - フレーム
 
@@ -233,6 +240,7 @@ struct TierEditView: View {
                         vm: vm,
                         dragPos: dragPos,
                         dragSel: dragSel,
+                        dragHover: dragHover,
                         rowFrames: rowFrames,
                         trayFrame: trayFrame,
                         onRowFramesChanged: { rowFrames = $0 }
@@ -356,6 +364,7 @@ struct TierEditView: View {
             showPool: $showPool,
             dragPos: dragPos,
             dragSel: dragSel,
+            dragHover: dragHover,
             rowFrames: rowFrames,
             trayFrame: trayFrame
         )

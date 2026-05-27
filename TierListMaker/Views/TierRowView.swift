@@ -1,6 +1,89 @@
 import SwiftUI
 internal import UniformTypeIdentifiers
 
+// MARK: - RowHoverBackground
+//
+// アイテムエリアの背景をホバー状態に応じて切り替える。
+// DragHoverState のみを購読するため、selectedItem / draggingItem の変化では再描画されない。
+// hoveredRowId の変化時も、LazyVGrid を含まないこの軽量ビューだけが再描画される。
+
+private struct RowHoverBackground: View {
+    let rowId: UUID
+    @ObservedObject var dragHover: DragHoverState
+    let tierTheme: TierTheme
+
+    private var isHovered: Bool { dragHover.hoveredRowId == rowId }
+
+    var body: some View {
+        Group {
+            if isHovered {
+                Color.blue.opacity(0.15)
+            } else {
+                ZStack {
+                    tierTheme.rowBackground
+                    TierPatternView(
+                        pattern: tierTheme.rowPattern,
+                        color: tierTheme.patternColor
+                    )
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
+    }
+}
+
+// MARK: - RowBorder
+//
+// 行全体の境界線をホバー・選択状態に応じて切り替える。
+// hoveredRowId（中頻度）と selectedItem（低頻度）の両方を参照するが、
+// 境界線のみを描画する軽量ビューなので再描画コストは小さい。
+
+private struct RowBorder: View {
+    let rowId: UUID
+    @ObservedObject var dragHover: DragHoverState
+    @ObservedObject var dragSel: DragInteractionState
+
+    private var isHovered: Bool { dragHover.hoveredRowId == rowId }
+
+    var body: some View {
+        let color: Color = isHovered
+            ? .blue
+            : (dragSel.selectedItem != nil ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3))
+        let width: CGFloat = isHovered
+            ? 2
+            : (dragSel.selectedItem != nil ? 1.5 : 0.5)
+        Rectangle().strokeBorder(color, lineWidth: width)
+    }
+}
+
+// MARK: - RowTapOverlay
+//
+// 選択アイテム待機中に行全体をタップ可能にする透明オーバーレイ。
+// DragInteractionState のみを購読する。selectedItem が nil のときはビューを生成しない。
+
+private struct RowTapOverlay: View {
+    let rowId: UUID
+    @ObservedObject var dragSel: DragInteractionState
+    let vm: TierListViewModel
+
+    var body: some View {
+        if dragSel.selectedItem != nil {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if let item = dragSel.selectedItem {
+                        withAnimation(.spring()) {
+                            vm.moveItem(item, toRowId: rowId)
+                            dragSel.selectedItem = nil
+                        }
+                    }
+                }
+        }
+    }
+}
+
+// MARK: - TierRowView
+
 struct TierRowView: View {
 
     let rowId: UUID
@@ -8,7 +91,11 @@ struct TierRowView: View {
     @ObservedObject var vm: TierListViewModel
 
     let dragPos: DragPositionState
-    @ObservedObject var dragSel: DragInteractionState
+    // dragHover / dragSel は let（@ObservedObject ではない）。
+    // 再描画は上記の子ビューが各自担うため、TierRowView 本体は
+    // row / vm の変化時のみ再描画される。
+    let dragHover: DragHoverState
+    let dragSel: DragInteractionState
 
     let rowFrames: [UUID: CGRect]
     let trayFrame: CGRect
@@ -18,13 +105,10 @@ struct TierRowView: View {
 
     @Environment(\.tierTheme) private var tierTheme
 
-    private var isHovered: Bool { dragSel.hoveredRowId == row.id }
-
     private var effectiveLabelSize: LabelSize { vm.defaultLabelSize }
     private var effectiveTextSize: LabelTextSize { vm.defaultLabelTextSize }
     private var effectiveItemSize: ItemSize { vm.defaultItemSize }
 
-    // MARK: - Color キャッシュ
     private var labelColor: Color { Color(hex: row.color) }
     private var textColor:  Color { Color(hex: row.textColorHex) }
 
@@ -34,27 +118,14 @@ struct TierRowView: View {
                 tierLabel
                 itemsArea
             }
-
-            if dragSel.selectedItem != nil {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if let item = dragSel.selectedItem {
-                            withAnimation(.spring()) {
-                                vm.moveItem(item, toRowId: row.id)
-                                dragSel.selectedItem = nil
-                            }
-                        }
-                    }
-            }
+            // 選択アイテム待機中のタップ領域（子ビューで購読）
+            RowTapOverlay(rowId: rowId, dragSel: dragSel, vm: vm)
         }
         .clipped()
-        .border(
-            isHovered
-                ? Color.blue
-                : (dragSel.selectedItem != nil ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3)),
-            width: isHovered ? 2 : (dragSel.selectedItem != nil ? 1.5 : 0.5)
-        )
+        .overlay {
+            // ホバー・選択状態に応じたボーダー（子ビューで購読）
+            RowBorder(rowId: rowId, dragHover: dragHover, dragSel: dragSel)
+        }
         .sheet(isPresented: $showEditSheet) {
             TierRowEditSheet(row: $row, vm: vm)
         }
@@ -69,13 +140,6 @@ struct TierRowView: View {
     }
 
     // MARK: - アイテムエリア
-    //
-    // GeometryReader をレイアウトコンテナとして使うと、
-    // 視覚的な描画位置と SwiftUI のヒットテスト領域がずれる問題が発生する。
-    //
-    // 修正：.adaptive グリッドに切り替えることで LazyVGrid が
-    // 自分のサイズを正確に自己報告するようにし、GeometryReader を排除。
-    // min == max == itemWidth なので列幅は .fixed と同じく固定値になる。
 
     private var itemsArea: some View {
         let columns = [
@@ -98,10 +162,11 @@ struct TierRowView: View {
                         withAnimation(.spring()) { dragSel.selectedItem = item }
                     },
                     dragPos: dragPos,
+                    dragHover: dragHover,
                     dragSel: dragSel,
                     trayFrame: trayFrame
                 )
-                .opacity(dragSel.selectedItem?.id == item.id ? 0.3 : 1.0)
+                // opacity は DraggableTierItem 内の isSelectedItem / isDraggingThis で管理
                 .frame(
                     width: effectiveItemSize.width,
                     height: effectiveItemSize.height
@@ -111,17 +176,9 @@ struct TierRowView: View {
         .padding(4)
         .frame(maxWidth: .infinity, minHeight: 70, alignment: .topLeading)
         .background {
-            ZStack {
-                isHovered ? Color.blue.opacity(0.15) : tierTheme.rowBackground
-                if !isHovered {
-                    TierPatternView(
-                        pattern: tierTheme.rowPattern,
-                        color: tierTheme.patternColor
-                    )
-                }
-            }
+            // 背景は RowHoverBackground が購読・描画（TierRowView 本体は非購読）
+            RowHoverBackground(rowId: rowId, dragHover: dragHover, tierTheme: tierTheme)
         }
-        .animation(.easeInOut(duration: 0.15), value: isHovered)
         .onDrop(of: [.text], isTargeted: nil) { _ in false }
     }
 
