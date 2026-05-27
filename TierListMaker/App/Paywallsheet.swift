@@ -99,11 +99,25 @@ struct PaywallSheet: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(Color.blue)
+                        .background(pm.product == nil && !pm.isLoading ? Color(.systemGray4) : Color.blue)
                         .foregroundColor(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                     }
-                    .disabled(isPurchasing || isRestoring || pm.isLoading)
+                    .disabled(isPurchasing || isRestoring || pm.isLoading || pm.product == nil)
+
+                    // 商品取得失敗時の再読み込みボタン
+                    if pm.product == nil && !pm.isLoading {
+                        Button {
+                            Task { await pm.load() }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                Text("再読み込みする")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        }
+                    }
 
                     // 復元ボタン
                     Button {
@@ -159,7 +173,7 @@ struct PaywallSheet: View {
         if let product = pm.product {
             return "購入する（\(product.displayPrice)・買い切り）"
         }
-        return "購入する"
+        return "価格を取得できませんでした"
     }
 
     // MARK: - Actions

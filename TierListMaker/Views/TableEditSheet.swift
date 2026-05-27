@@ -7,6 +7,9 @@ struct TableEditSheet: View {
     // Pro判定（テーマロック表示に使用）
     @EnvironmentObject private var pm: PurchaseManager
     @State private var showPaywall = false
+    @State private var showCropResetAlert = false
+    /// 完了タップ時に実際に apply する処理を一時保持（アラート確認後に実行）
+    @State private var pendingItemSize: ItemSize? = nil
 
     @State private var editedLabelSize: LabelSize
     @State private var editedLabelTextSize: LabelTextSize
@@ -217,12 +220,13 @@ struct TableEditSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") {
-                        vm.applyLabelSizeToAll(editedLabelSize)
-                        vm.applyLabelTextSizeToAll(editedLabelTextSize)
-                        vm.applyItemSizeToAll(editedItemSize)
-                        vm.applyItemTextSizeToAll(editedItemTextSize)
-                        vm.tierTheme = editedTierTheme
-                        dismiss()
+                        // アイテムサイズが変わる かつ カスタムクロップ済みアイテムがある場合に警告
+                        if editedItemSize != vm.defaultItemSize && hasCustomCropItems {
+                            pendingItemSize = editedItemSize
+                            showCropResetAlert = true
+                        } else {
+                            applyAll()
+                        }
                     }
                     .bold()
                 }
@@ -230,7 +234,38 @@ struct TableEditSheet: View {
             .sheet(isPresented: $showPaywall) {
                 PaywallSheet()
             }
+            .alert("クロップ設定がリセットされます", isPresented: $showCropResetAlert) {
+                Button("リセットして変更", role: .destructive) {
+                    applyAll()
+                }
+                Button("キャンセル", role: .cancel) {
+                    pendingItemSize = nil
+                }
+            } message: {
+                Text("アイテムサイズを変更すると、調整済みのクロップ・拡大縮小設定がすべてリセットされます。")
+            }
         }
+    }
+
+    // MARK: - Helpers
+
+    /// カスタムクロップが設定されているアイテムが1つでも存在するか
+    private var hasCustomCropItems: Bool {
+        let allItems = vm.pool + vm.rows.flatMap(\.items)
+        return allItems.contains {
+            $0.cropOffsetX != 0 || $0.cropOffsetY != 0 || $0.cropScale != 1.0
+        }
+    }
+
+    /// 編集内容を vm に反映して閉じる
+    private func applyAll() {
+        vm.applyLabelSizeToAll(editedLabelSize)
+        vm.applyLabelTextSizeToAll(editedLabelTextSize)
+        vm.applyItemSizeToAll(pendingItemSize ?? editedItemSize)
+        vm.applyItemTextSizeToAll(editedItemTextSize)
+        vm.tierTheme = editedTierTheme
+        pendingItemSize = nil
+        dismiss()
     }
 
     // MARK: - テーマボタン

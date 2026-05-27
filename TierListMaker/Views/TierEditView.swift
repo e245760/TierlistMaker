@@ -214,7 +214,7 @@ struct TierEditView: View {
 
     @State private var isEditingTitle = false
     @FocusState private var titleFocused: Bool
-    private let maxTitleLength = 10
+    private let maxTitleLength = 20
 
     // MARK: - ドラッグ状態
 
@@ -226,6 +226,10 @@ struct TierEditView: View {
 
     @State private var rowFrames: [UUID: CGRect] = [:]
     @State private var trayFrame: CGRect = .zero
+
+    // MARK: - ライフサイクル
+
+    @Environment(\.scenePhase) private var scenePhase
 
     // MARK: - Body
 
@@ -321,18 +325,22 @@ struct TierEditView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // ★ 旧: ToolbarItem × 4 がインラインにあった
-                // → TierEditToolbar に切り出し
-
                 TierEditToolbar(
                     title: $tierListTitle,
                     isEditing: $isEditingTitle,
                     focused: $titleFocused,
                     maxLength: maxTitleLength,
                     onBack:     { saveAndDismiss() },
-                    onSave:     { triggerSaveFeedback() },
+                    onExport:   { openExport() },
                     onSettings: { showTableEdit = true }
                 )
+            }
+            .onChange(of: scenePhase) { phase in
+                // バックグラウンド移行時に自動保存
+                // 戻るボタン・エクスポートとは独立して動作する
+                if phase == .background {
+                    autoSave()
+                }
             }
             .environment(\.tierTheme, vm.tierTheme)
             .sheet(isPresented: $showAddItem) {
@@ -382,14 +390,25 @@ struct TierEditView: View {
         onDismiss()
     }
 
-    private func triggerSaveFeedback() {
+    /// バックグラウンド移行時の自動保存。
+    /// 戻るボタンによる保存と処理は同じだが、画面遷移は行わない。
+    private func autoSave() {
         let data = vm.toSaveData(
             id: saveId,
             title: normalizedTitle,
             createdAt: createdAt
         )
-        onSave(data)           // ライブラリへ保存（従来通り）
-        showExportSheet = true // プレビューシートを開く
+        onSave(data)
+    }
+
+    private func openExport() {
+        let data = vm.toSaveData(
+            id: saveId,
+            title: normalizedTitle,
+            createdAt: createdAt
+        )
+        onSave(data)
+        showExportSheet = true
     }
 
     // MARK: - Helpers

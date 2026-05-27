@@ -8,7 +8,7 @@ import Combine
 // singleton（.shared）として使い、HomeView / LibraryView / PaywallSheet で共有する。
 //
 // ── 定数 ──
-//   freeLimit : 無料で作れるティア表の上限（5個）
+//   freeLimit : 無料で作れるティア表の上限（10個）
 //   proLimit  : Pro購入後の上限（50個）
 //   productId : App Store Connect に登録するプロダクトID（必要に応じて変更）
 
@@ -19,7 +19,7 @@ final class PurchaseManager: ObservableObject {
 
     // MARK: - 定数
 
-    static let freeLimit = 5
+    static let freeLimit = 10
     static let proLimit  = 50
 
     /// App Store Connect で設定するプロダクトID

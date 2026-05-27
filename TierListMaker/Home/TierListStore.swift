@@ -13,11 +13,18 @@ import Combine
 // 全件を毎回エンコードする旧 UserDefaults 方式と異なり、
 // 表の数が増えても書き込みコストが増加しない。
 //
+// ── 非同期ロード ──
+//   init() でディレクトリ作成のみ行い、ファイル I/O は Task { await loadAsync() }
+//   に委譲する。メインスレッドをブロックせず、起動時のヒッチを防ぐ。
+//
+// ── 書き込みの原子性 ──
+//   upsert/delete ともにデータファイルと index.json を1つの Task にまとめて書く。
+//   2つの Task に分けると、クラッシュ時に index が古いまま残るリスクがあった。
+//
 // ── マイグレーション ──
 //   旧形式（UserDefaults "tierListStore_v1"）が存在する場合、
 //   初回起動時に自動的に新形式へ変換する。
 //   変換後、次回起動時に新形式で読み込めたことを確認してから旧データを削除する。
-//   ファイル書き込みは非同期のため、同一起動内での削除は行わない。
 
 @MainActor
 class TierListStore: ObservableObject {
@@ -36,6 +43,9 @@ class TierListStore: ObservableObject {
     }
 
     // MARK: - Init
+    //
+    // ディレクトリ作成だけ同期で行い、ファイル I/O は非同期タスクに委譲する。
+    // PurchaseManager.init() と同じパターン。
 
     init() {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -43,7 +53,7 @@ class TierListStore: ObservableObject {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         directory = dir
         indexURL  = dir.appendingPathComponent("index.json")
-        load()
+        Task { await loadAsync() }
     }
 
     // MARK: - Public API
@@ -54,9 +64,9 @@ class TierListStore: ObservableObject {
         } else {
             savedLists.insert(data, at: 0)
         }
-        // 変更された1件だけを書き込む（全件書き込みは不要）
-        persistSingle(data)
-        persistIndex()
+        // データファイルと index.json を1つの Task にまとめて書く。
+        // 分けると2つの Task の間にクラッシュした場合に index が不整合になるリスクがある。
+        persistDataAndIndex(data)
     }
 
     func delete(id: UUID) {
@@ -64,8 +74,7 @@ class TierListStore: ObservableObject {
             deleteImageFiles(for: saveData)
         }
         savedLists.removeAll { $0.id == id }
-        removeFile(id: id)
-        persistIndex()
+        removeFileAndUpdateIndex(id: id)
     }
 
     // MARK: - 画像ファイル削除
@@ -83,58 +92,68 @@ class TierListStore: ObservableObject {
         ImageFileStore.shared.delete(fileNames: fileNames)
     }
 
-    // MARK: - 永続化（個別ファイル）
+    // MARK: - 永続化
     //
-    // URL をメインスレッドで計算してからタスクに渡す。
-    // URL・Data はどちらも値型（Sendable）なので Task.detached へ安全に渡せる。
+    // URL・Data・[String] はすべて値型（Sendable）なので Task.detached へ安全に渡せる。
 
-    private func persistSingle(_ data: TierListSaveData) {
-        let url = fileURL(for: data.id)
+    /// データファイル書き込み → index.json 書き込みを1つの Task で順番に実行する。
+    /// 途中でクラッシュしても「index にないファイルが存在する」状態で済み、
+    /// 「index にある UUID のファイルがない」状態（読み込みエラー）を避けられる。
+    private func persistDataAndIndex(_ data: TierListSaveData) {
+        let dataURL  = fileURL(for: data.id)
+        let idxURL   = indexURL
+        let ids      = savedLists.map { $0.id.uuidString }
         Task.detached(priority: .utility) {
-            guard let encoded = try? JSONEncoder().encode(data) else { return }
-            try? encoded.write(to: url, options: .atomic)
+            if let encoded = try? JSONEncoder().encode(data) {
+                try? encoded.write(to: dataURL, options: .atomic)
+            }
+            if let encoded = try? JSONEncoder().encode(ids) {
+                try? encoded.write(to: idxURL, options: .atomic)
+            }
         }
     }
 
-    /// index.json に UUID 文字列の配列を書き込む（表示順の管理）
-    private func persistIndex() {
-        let ids = savedLists.map { $0.id.uuidString }
-        let url = indexURL
+    /// ファイル削除 → index.json 更新を1つの Task で順番に実行する。
+    private func removeFileAndUpdateIndex(id: UUID) {
+        let dataURL = fileURL(for: id)
+        let idxURL  = indexURL
+        let ids     = savedLists.map { $0.id.uuidString }
         Task.detached(priority: .utility) {
-            guard let encoded = try? JSONEncoder().encode(ids) else { return }
-            try? encoded.write(to: url, options: .atomic)
+            try? FileManager.default.removeItem(at: dataURL)
+            if let encoded = try? JSONEncoder().encode(ids) {
+                try? encoded.write(to: idxURL, options: .atomic)
+            }
         }
     }
 
-    private func removeFile(id: UUID) {
-        let url = fileURL(for: id)
-        Task.detached(priority: .utility) {
-            try? FileManager.default.removeItem(at: url)
-        }
-    }
+    // MARK: - 読み込み（非同期）
 
-    // MARK: - 読み込み
+    private func loadAsync() async {
+        // バックグラウンドでファイル I/O を実行
+        let result = await Task.detached(priority: .userInitiated) { [self] in
+            loadFromFiles()
+        }.value
 
-    private func load() {
-        // 優先: 新形式（index.json + 個別ファイル）
-        if let lists = loadFromFiles() {
+        if let lists = result {
+            // 新形式で読み込み成功
             savedLists = lists
-            // 新形式で正常に読み込めた → 旧 UserDefaults が残っていれば削除
-            // （マイグレーション後の初回起動でここに到達する）
+            // 旧 UserDefaults が残っていれば削除（マイグレーション後の初回起動）
             if UserDefaults.standard.data(forKey: legacyKey) != nil {
                 UserDefaults.standard.removeObject(forKey: legacyKey)
             }
-            return
+        } else {
+            // フォールバック: 旧形式からマイグレーション
+            migrateLegacyIfNeeded()
         }
-        // フォールバック: 旧形式からマイグレーション
-        migrateLegacyIfNeeded()
     }
 
     /// index.json を読み、UUID 順に個別ファイルをデコードして返す。
     /// index.json が存在しない場合は nil を返す（旧形式と区別するため）。
-    private func loadFromFiles() -> [TierListSaveData]? {
+    /// Task.detached から呼ばれるため nonisolated で宣言する。
+    private nonisolated func loadFromFiles() -> [TierListSaveData]? {
+        let idxURL = indexURL
         guard
-            let indexData = try? Data(contentsOf: indexURL),
+            let indexData = try? Data(contentsOf: idxURL),
             let ids       = try? JSONDecoder().decode([String].self, from: indexData)
         else { return nil }
 
@@ -142,12 +161,11 @@ class TierListStore: ObservableObject {
         var lists: [TierListSaveData] = []
         for uuidString in ids {
             guard let uuid = UUID(uuidString: uuidString) else { continue }
-            let url = fileURL(for: uuid)
+            let url = directory.appendingPathComponent("\(uuid.uuidString).json")
             guard
                 let fileData = try? Data(contentsOf: url),
                 let decoded  = try? decoder.decode(TierListSaveData.self, from: fileData)
             else {
-                // ファイルが欠損している場合はスキップ（他の表には影響しない）
                 print("[TierListStore] ファイルが見つかりません: \(uuidString).json")
                 continue
             }
@@ -162,7 +180,7 @@ class TierListStore: ObservableObject {
     // 新形式: Documents/TierLists/{UUID}.json + index.json
     //
     // ファイル書き込みは非同期のため、UserDefaults の削除はここでは行わない。
-    // 次回起動時に loadFromFiles() が成功すれば load() 内で削除される。
+    // 次回起動時に loadAsync() が成功すれば削除される。
 
     private func migrateLegacyIfNeeded() {
         guard
@@ -172,8 +190,6 @@ class TierListStore: ObservableObject {
 
         print("[TierListStore] 旧形式からマイグレーションを開始します（\(decoded.count)件）")
         savedLists = decoded
-        for item in decoded { persistSingle(item) }
-        persistIndex()
-        // UserDefaults は次回起動（新形式で読み込み成功後）に削除する
+        for item in decoded { persistDataAndIndex(item) }
     }
 }

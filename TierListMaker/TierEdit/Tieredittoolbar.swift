@@ -19,7 +19,7 @@ struct TierEditToolbar: ToolbarContent {
     // MARK: - Callbacks
 
     let onBack: () -> Void
-    let onSave: () -> Void
+    let onExport: () -> Void
     let onSettings: () -> Void
 
     // MARK: - Body
@@ -41,10 +41,10 @@ struct TierEditToolbar: ToolbarContent {
             titleView
         }
 
-        // ── 右：保存 ＋ 設定 ──
+        // ── 右：エクスポート ＋ 設定 ──
         ToolbarItemGroup(placement: .navigationBarTrailing) {
-            Button(action: onSave) {
-                Image(systemName: "square.and.arrow.down").font(.body)
+            Button(action: onExport) {
+                Image(systemName: "square.and.arrow.up").font(.body)
             }
             Button(action: onSettings) {
                 Image(systemName: "gearshape").font(.body)
