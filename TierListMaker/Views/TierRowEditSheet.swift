@@ -10,7 +10,7 @@ struct TierRowEditSheet: View {
     @Environment(\.appTheme) private var appTheme
 
     // PurchaseManager をシングルトンから直接参照（呼び出し元の変更不要）
-    @ObservedObject private var pm = PurchaseManager.shared
+    @EnvironmentObject private var pm: PurchaseManager
 
     @State private var editedName: String
     @State private var editedColor: Color
@@ -206,7 +206,7 @@ struct TierRowEditSheet: View {
                 }
             }
             .sheet(isPresented: $showPaywall) {
-                PaywallSheet(pm: pm)
+                PaywallSheet()
             }
         }
         // TierRowViewはTierThemeのcolorSchemeが適用されたスコープ内にあるため、

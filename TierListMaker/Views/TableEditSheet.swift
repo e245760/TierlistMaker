@@ -5,7 +5,7 @@ struct TableEditSheet: View {
     @Environment(\.dismiss) var dismiss
 
     // Pro判定（テーマロック表示に使用）
-    @ObservedObject private var pm = PurchaseManager.shared
+    @EnvironmentObject private var pm: PurchaseManager
     @State private var showPaywall = false
 
     @State private var editedLabelSize: LabelSize
@@ -228,7 +228,7 @@ struct TableEditSheet: View {
                 }
             }
             .sheet(isPresented: $showPaywall) {
-                PaywallSheet(pm: pm)
+                PaywallSheet()
             }
         }
     }

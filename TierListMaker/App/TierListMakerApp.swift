@@ -10,11 +10,11 @@ struct TierListMakerApp: App {
                 .preferredColorScheme(appTheme.colorScheme)
                 .environment(\.appTheme, appTheme)
                 .environment(\.setAppTheme, { appTheme = $0 })
+                .environmentObject(PurchaseManager.shared) // ← 追加
         }
     }
 }
 
-// MARK: - setAppTheme EnvironmentKey（変更なし）
 private struct SetAppThemeKey: EnvironmentKey {
     static let defaultValue: (AppTheme) -> Void = { _ in }
 }

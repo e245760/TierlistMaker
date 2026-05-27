@@ -56,7 +56,7 @@ struct TierExportSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     // Pro判定（ウォーターマークトグルの表示制御に使用）
-    @ObservedObject private var pm = PurchaseManager.shared
+    @EnvironmentObject private var pm: PurchaseManager
 
     @State private var selectedRatio: ExportAspectRatio = .square
     @State private var renderedImage: UIImage? = nil
@@ -257,7 +257,7 @@ struct TierExportSheet: View {
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .sheet(isPresented: $showPaywall) {
-            PaywallSheet(pm: pm)
+            PaywallSheet()
         }
     }
 

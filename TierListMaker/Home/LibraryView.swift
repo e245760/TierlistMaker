@@ -2,7 +2,7 @@ import SwiftUI
 
 struct LibraryView: View {
     @ObservedObject var store: TierListStore
-    @ObservedObject var pm: PurchaseManager        // ← 追加
+    @EnvironmentObject private var pm: PurchaseManager // ← 引数から変更
     let onOpen: (TierListSaveData?) -> Void
 
     @State private var deletingId: UUID? = nil

@@ -21,7 +21,7 @@ struct TextItemEditSheet: View {
     @Environment(\.dismiss) var dismiss
 
     // PurchaseManager をシングルトンから直接参照（呼び出し元の変更不要）
-    @ObservedObject private var pm = PurchaseManager.shared
+    @EnvironmentObject private var pm: PurchaseManager
 
     @State private var editedLabel: String
     @State private var editedTextColor: Color
@@ -115,7 +115,7 @@ struct TextItemEditSheet: View {
                 }
             }
             .sheet(isPresented: $showPaywall) {
-                PaywallSheet(pm: pm)
+                PaywallSheet()
             }
         }
     }

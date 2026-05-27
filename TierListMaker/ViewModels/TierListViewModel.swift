@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 
+@MainActor
 class TierListViewModel: ObservableObject {
     @Published var rows: [TierRow] = [
         TierRow(tierName: "S", color: "#FF7F7F", items: []),

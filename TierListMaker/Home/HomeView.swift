@@ -9,15 +9,15 @@ private struct EditorSession: Identifiable {
 
 struct HomeView: View {
     @StateObject private var store = TierListStore()
-    @StateObject private var pm    = PurchaseManager.shared   // ← 追加
+    @EnvironmentObject private var pm: PurchaseManager // ← @StateObject から変更
     @AppStorage("appTheme") private var appTheme: AppTheme = .light
 
     @State private var editorSession: EditorSession? = nil
-    @State private var showPaywall = false                     // ← 追加
+    @State private var showPaywall = false
 
     var body: some View {
         TabView {
-            LibraryView(store: store, pm: pm, onOpen: openEditor)   // ← pm を渡す
+            LibraryView(store: store, onOpen: openEditor) // ← pm 引数を削除
                 .tabItem { Label("ライブラリ", systemImage: "square.grid.2x2") }
 
             AppSettingsView()
@@ -35,14 +35,12 @@ struct HomeView: View {
             .environment(\.appTheme, appTheme)
             .environment(\.setAppTheme, { appTheme = $0 })
         }
-        // ← ペイウォールシート
         .sheet(isPresented: $showPaywall) {
-            PaywallSheet(pm: pm)
+            PaywallSheet()
         }
     }
 
     private func openEditor(with saveData: TierListSaveData?) {
-        // 新規作成かつ上限に達している場合はペイウォールを表示
         if saveData == nil, !pm.canCreate(currentCount: store.savedLists.count) {
             showPaywall = true
             return
@@ -58,7 +56,6 @@ struct HomeView: View {
                 createdAt: saveData.createdAt
             )
         } else {
-            // 新規作成: アプリテーマに合わせて TierTheme を初期化
             vm.tierTheme = appTheme == .dark ? .dark : .classic
             editorSession = EditorSession(
                 id: UUID(),
@@ -72,4 +69,5 @@ struct HomeView: View {
 
 #Preview {
     HomeView()
+        .environmentObject(PurchaseManager.shared)
 }

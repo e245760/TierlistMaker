@@ -9,7 +9,7 @@ import StoreKit
 
 struct PaywallSheet: View {
 
-    @ObservedObject var pm: PurchaseManager
+    @EnvironmentObject private var pm: PurchaseManager
     @Environment(\.dismiss) private var dismiss
 
     @State private var isPurchasing = false
@@ -198,5 +198,6 @@ struct PaywallSheet: View {
 // MARK: - Preview
 
 #Preview {
-    PaywallSheet(pm: PurchaseManager.shared)
+    PaywallSheet()
+        .environmentObject(PurchaseManager.shared)
 }
