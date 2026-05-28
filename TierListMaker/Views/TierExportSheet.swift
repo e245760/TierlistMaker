@@ -66,8 +66,9 @@ struct TierExportSheet: View {
     @State private var savedOK     = false
     @State private var showPermissionAlert = false
     @State private var showShareSheet = false
-    /// GeometryReader で測定したコンテナ幅。初期値はフォールバック用。
-    @State private var containerWidth: CGFloat = 390
+    /// GeometryReader で測定したコンテナ幅。
+    /// 0 で初期化し、onAppear で実際の幅が入った時点を初回レンダリングのトリガーにする。
+    @State private var containerWidth: CGFloat = 0
     /// Pro購入済みユーザーのみ切り替え可能。無料ユーザーは常に true（表示）。
     @State private var showWatermark: Bool = true
 
@@ -85,6 +86,8 @@ struct TierExportSheet: View {
                             .foregroundColor(.secondary)
                     }
                 }
+                // onAppear で containerWidth を確定させる。
+                // これが初回レンダリングのトリガーになる（.task は使わない）。
                 .onAppear { containerWidth = geo.size.width }
                 .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
             }
@@ -96,7 +99,9 @@ struct TierExportSheet: View {
                 }
             }
         }
-        .task { await renderImage() }
+        // containerWidth が 0 → 実際の幅 に変化したタイミングが初回レンダリング。
+        // selectedRatio / showWatermark の変化も同じパターンで拾う。
+        .onChange(of: containerWidth)  { _, _ in Task { await renderImage() } }
         .onChange(of: selectedRatio)   { _, _ in Task { await renderImage() } }
         .onChange(of: showWatermark)   { _, _ in Task { await renderImage() } }
         .alert("写真へのアクセスを許可してください", isPresented: $showPermissionAlert) {
@@ -315,6 +320,10 @@ struct TierExportSheet: View {
 
     @MainActor
     private func renderImage() async {
+        // containerWidth が確定していなければ何もしない。
+        // onAppear より先に呼ばれた場合のセーフガード。
+        guard containerWidth > 0 else { return }
+
         isRendering = true
         savedOK     = false
 

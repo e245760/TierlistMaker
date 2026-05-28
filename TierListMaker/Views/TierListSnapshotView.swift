@@ -83,25 +83,32 @@ struct TierListSnapshotView: View {
         }
 
         // 反復配分
+        //
+        // pendingIds は naturalDict のキーから生成した Set のため、
+        // naturalDict[id] が nil になることは構造上ありえない。
+        // ただし force unwrap を避け、フォールバック値（minH）を使うことで
+        // 万が一のクラッシュを防ぎ、コードの意図を明確にする。
+        let minH = itemH + 8
         var pendingIds      = Set(rows.map { $0.id })
         var remainingBudget = available
         var result          = [UUID: CGFloat]()
 
         while !pendingIds.isEmpty {
             let share       = remainingBudget / CGFloat(pendingIds.count)
-            let overflowing = pendingIds.filter { naturalDict[$0]! > share }
+            let overflowing = pendingIds.filter { (naturalDict[$0] ?? minH) > share }
 
             if overflowing.isEmpty {
                 // 残り全行が均等割り以下 → 均等に分配して終了
-                let allocated = max(share, itemH + 8)
+                let allocated = max(share, minH)
                 for id in pendingIds { result[id] = allocated }
                 break
             }
 
             // 自然な高さが均等割りを超える行を固定
             for id in overflowing {
-                result[id]       = naturalDict[id]!
-                remainingBudget -= naturalDict[id]!
+                let h            = naturalDict[id] ?? minH
+                result[id]       = h
+                remainingBudget -= h
                 pendingIds.remove(id)
             }
         }
@@ -160,7 +167,6 @@ struct TierListSnapshotView: View {
         .background(tierTheme.rowBackground)
         .environment(\.colorScheme, tierTheme.colorScheme)
         .environment(\.tierTheme, tierTheme)
-        .environment(\.syncImageLoading, true) 
     }
 
     // MARK: - 行ビュー
