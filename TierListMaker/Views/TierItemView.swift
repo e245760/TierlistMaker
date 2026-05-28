@@ -1,100 +1,158 @@
 import SwiftUI
 
+// MARK: - 環境キー：同期ロードモード
+//
+// ImageRenderer（TierListSnapshotView）はSwiftUIのライフサイクルを持たないため
+// .task が実行されない。スナップショット用に同期ロードへ切り替えるための環境値。
+// 通常のインタラクティブ表示では false（デフォルト）のまま使う。
+
+private struct SyncImageLoadingKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
+    var syncImageLoading: Bool {
+        get { self[SyncImageLoadingKey.self] }
+        set { self[SyncImageLoadingKey.self] = newValue }
+    }
+}
+
+// MARK: - TierItemView
+
 struct TierItemView: View {
     let item: TierItem
 
-    // テキストアイテムのフォントをテーマから取得する。
-    // TierItemView は TierRowView・ItemPoolView・各プレビューなど
-    // 幅広い場所から呼ばれるため、Environment 経由で受け取る。
-    @Environment(\.tierTheme) private var tierTheme
+    @Environment(\.tierTheme)          private var tierTheme
+    @Environment(\.syncImageLoading)   private var syncImageLoading
+
+    // 非同期ロード結果を保持するState
+    // ForEach内でもTierItemのid安定性によりSwiftUIがビューを正しく同定するため
+    // スクロール復帰時はキャッシュヒット（高速）になる
+    @State private var loadedImage: UIImage? = nil
+
+    // MARK: - Body
 
     var body: some View {
         Group {
-            if let fileName = item.imageFileName,
-               let uiImage = ImageFileStore.shared.load(fileName: fileName) {
-                let (ox, oy, sc) = resolvedCrop(for: uiImage)
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFill()
-                    .scaleEffect(sc)
-                    .offset(
-                        x: ox * item.itemSize.width,
-                        y: oy * item.itemSize.height
-                    )
-                    .scaleEffect(
-                        x: item.isFlippedHorizontal ? -1 : 1,
-                        y: item.isFlippedVertical   ? -1 : 1
-                    )
+            if item.imageFileName != nil {
+                imageContent
             } else {
-                Text(item.label)
-                    // ← .system(size:weight:) から tierTheme.fontStyle.font(size:) に変更
-                    .font(tierTheme.fontStyle.font(size: item.textSize.fontSize))
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(Color(hex: item.textColorHex))
-                    .padding(4)
+                textContent
             }
         }
         .frame(width: item.itemSize.width, height: item.itemSize.height)
         .background(backgroundColor)
         .clipShape(itemClipShape)
+        // imageFileNameが変わったとき（将来の差し替え対応）も再ロードする
+        .task(id: item.imageFileName) {
+            // syncImageLoadingモードではbodyで同期ロードするのでtaskは何もしない
+            guard !syncImageLoading else { return }
+            await loadImageAsync()
+        }
     }
 
-    // MARK: - 背景色
+    // MARK: - 画像表示
 
-    /// cropContain が OFF かつ cropTransparentBg が ON のとき透明にする
-    private var backgroundColor: Color {
-        if !item.cropContain && item.cropTransparentBg {
-            return .clear
+    @ViewBuilder
+    private var imageContent: some View {
+        // syncImageLoading: bodyで直接load()（スナップショット用）
+        // 通常:             @StateのloadedImageを参照（非同期ロード結果）
+        let uiImage: UIImage? = syncImageLoading
+            ? item.imageFileName.flatMap { ImageFileStore.shared.load(fileName: $0) }
+            : loadedImage
+
+        if let uiImage {
+            let (ox, oy, sc) = resolvedCrop(for: uiImage)
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+                .scaleEffect(sc)
+                .offset(
+                    x: ox * item.itemSize.width,
+                    y: oy * item.itemSize.height
+                )
+                .scaleEffect(
+                    x: item.isFlippedHorizontal ? -1 : 1,
+                    y: item.isFlippedVertical   ? -1 : 1
+                )
+        } else {
+            // ロード中プレースホルダー（背景色で埋める）
+            Color(hex: item.backgroundColorHex)
         }
+    }
+
+    // MARK: - テキスト表示（変更なし）
+
+    @ViewBuilder
+    private var textContent: some View {
+        Text(item.label)
+            .font(tierTheme.fontStyle.font(size: item.textSize.fontSize))
+            .minimumScaleFactor(0.5)
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+            .foregroundColor(Color(hex: item.textColorHex))
+            .padding(4)
+    }
+
+    // MARK: - 非同期ロード
+
+    private func loadImageAsync() async {
+        guard let fileName = item.imageFileName else {
+            loadedImage = nil
+            return
+        }
+
+        // ① キャッシュヒット：ディスクI/Oなし、メインスレッドで即時完了
+        if let cached = ImageFileStore.shared.cachedImage(fileName: fileName) {
+            loadedImage = cached
+            return
+        }
+
+        // ② キャッシュミス：バックグラウンドでディスクI/O
+        //    load()はキャッシュへの書き込みも行うため、
+        //    次回以降は①のパスで高速に返る
+        let image = await Task.detached(priority: .userInitiated) {
+            ImageFileStore.shared.load(fileName: fileName)
+        }.value
+
+        // ビューが消えてTaskがキャンセルされた場合は反映しない
+        guard !Task.isCancelled else { return }
+        loadedImage = image
+    }
+
+    // MARK: - 以下は変更なし
+
+    private var backgroundColor: Color {
+        if !item.cropContain && item.cropTransparentBg { return .clear }
         return Color(hex: item.backgroundColorHex)
     }
 
-    // MARK: - クロップ値の解決
-
-    private func resolvedCrop(for uiImage: UIImage) -> (offsetX: CGFloat, offsetY: CGFloat, scale: CGFloat) {
+    private func resolvedCrop(for uiImage: UIImage) -> (CGFloat, CGFloat, CGFloat) {
         if item.cropContain {
             let clampedScale = max(1.0, item.cropScale)
             let (maxX, maxY) = maxAllowedOffset(for: uiImage, scale: clampedScale)
-            let cx = item.cropOffsetX.clamped(to: -maxX...maxX)
-            let cy = item.cropOffsetY.clamped(to: -maxY...maxY)
-            return (cx, cy, clampedScale)
-        } else {
-            return (item.cropOffsetX, item.cropOffsetY, item.cropScale)
+            return (
+                item.cropOffsetX.clamped(to: -maxX...maxX),
+                item.cropOffsetY.clamped(to: -maxY...maxY),
+                clampedScale
+            )
         }
+        return (item.cropOffsetX, item.cropOffsetY, item.cropScale)
     }
 
     func maxAllowedOffset(for uiImage: UIImage, scale: CGFloat) -> (x: CGFloat, y: CGFloat) {
-        let fW = item.itemSize.width
-        let fH = item.itemSize.height
-        let imgW = uiImage.size.width
-        let imgH = uiImage.size.height
+        let fW = item.itemSize.width,  fH = item.itemSize.height
+        let imgW = uiImage.size.width, imgH = uiImage.size.height
         guard imgH > 0, fW > 0, fH > 0 else { return (0, 0) }
-
-        let imgAspect = imgW / imgH
-        let frameAspect = fW / fH
-        let fillW: CGFloat
-        let fillH: CGFloat
-        if imgAspect > frameAspect {
-            fillH = fH
-            fillW = imgAspect * fH
-        } else {
-            fillW = fW
-            fillH = fW / imgAspect
-        }
-
-        let scaledW = scale * fillW
-        let scaledH = scale * fillH
-        let maxPxX = (scaledW - fW) / 2.0
-        let maxPxY = (scaledH - fH) / 2.0
+        let imgAspect = imgW / imgH, frameAspect = fW / fH
+        let fillW: CGFloat, fillH: CGFloat
+        if imgAspect > frameAspect { fillH = fH; fillW = imgAspect * fH }
+        else                       { fillW = fW; fillH = fW / imgAspect }
         return (
-            x: max(0, maxPxX / fW),
-            y: max(0, maxPxY / fH)
+            x: max(0, (scale * fillW - fW) / 2.0 / fW),
+            y: max(0, (scale * fillH - fH) / 2.0 / fH)
         )
     }
-
-    // MARK: - クリップ形状
 
     private var itemClipShape: AnyShape {
         item.itemSize == .circle
@@ -102,8 +160,6 @@ struct TierItemView: View {
             : AnyShape(RoundedRectangle(cornerRadius: 6))
     }
 }
-
-// MARK: - clamp helper
 
 extension Comparable {
     func clamped(to range: ClosedRange<Self>) -> Self {

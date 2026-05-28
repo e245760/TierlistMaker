@@ -40,6 +40,14 @@ final class ImageFileStore {
     func fileName(for itemId: UUID) -> String {
         "\(itemId.uuidString).jpg"
     }
+    
+    // MARK: - キャッシュ参照（ディスクI/Oなし）
+    //
+    // メインスレッドで呼んでも安全。
+    // ミス時は nil を返し、呼び出し元がバックグラウンドロードを判断する。
+    func cachedImage(fileName: String) -> UIImage? {
+        cache.object(forKey: fileName as NSString)
+    }
 
     // MARK: - 保存
 

@@ -160,6 +160,7 @@ struct TierListSnapshotView: View {
         .background(tierTheme.rowBackground)
         .environment(\.colorScheme, tierTheme.colorScheme)
         .environment(\.tierTheme, tierTheme)
+        .environment(\.syncImageLoading, true) 
     }
 
     // MARK: - 行ビュー
