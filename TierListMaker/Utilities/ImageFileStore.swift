@@ -31,22 +31,26 @@ final class ImageFileStore {
     // MARK: - メモリキャッシュ
     //
     // NSCache はメモリ逼迫時にエントリを自動解放するため、手動管理が不要。
+    //
+    // ── 上限の根拠 ──
+    //   countLimit  : 200件（1表あたり最大 8行×多数 + pool を想定し余裕を持たせた値）
+    //   totalCostLimit : 100MB（UIImage の生データサイズをコストに使うため、
+    //                    JPEG圧縮後サイズではなくデコード後のビットマップサイズが積み上がる。
+    //                    65×65pt @3x ≈ 150KB × 200件 ≈ 30MB 程度だが、
+    //                    大きな画像を縮小せず保存した場合のバッファとして 100MB に設定。）
 
-    private let cache = NSCache<NSString, UIImage>()
+    private let cache: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.countLimit      = 200
+        c.totalCostLimit  = 100 * 1024 * 1024  // 100MB
+        return c
+    }()
 
     // MARK: - ファイル名生成
 
     /// アイテムIDから保存ファイル名を生成する（"{UUID}.jpg"）
     func fileName(for itemId: UUID) -> String {
         "\(itemId.uuidString).jpg"
-    }
-    
-    // MARK: - キャッシュ参照（ディスクI/Oなし）
-    //
-    // メインスレッドで呼んでも安全。
-    // ミス時は nil を返し、呼び出し元がバックグラウンドロードを判断する。
-    func cachedImage(fileName: String) -> UIImage? {
-        cache.object(forKey: fileName as NSString)
     }
 
     // MARK: - 保存
@@ -57,8 +61,10 @@ final class ImageFileStore {
         do {
             try data.write(to: url, options: .atomic)
             // 保存成功時にキャッシュも更新
+            // cost にデコード後のバイト数を渡すことで totalCostLimit が正確に機能する
             if let image = UIImage(data: data) {
-                cache.setObject(image, forKey: fileName as NSString)
+                let cost = Int(image.size.width * image.size.height * image.scale * image.scale) * 4
+                cache.setObject(image, forKey: fileName as NSString, cost: cost)
             }
             return true
         } catch {
@@ -68,6 +74,12 @@ final class ImageFileStore {
     }
 
     // MARK: - 読み込み
+
+    /// キャッシュのみを参照する（ディスクI/Oなし）。
+    /// メインスレッドで呼んでも安全。ミス時は nil を返す。
+    func cachedImage(fileName: String) -> UIImage? {
+        cache.object(forKey: fileName as NSString)
+    }
 
     func load(fileName: String) -> UIImage? {
         // キャッシュヒット
@@ -81,7 +93,8 @@ final class ImageFileStore {
             let image = UIImage(data: data)
         else { return nil }
         // キャッシュに登録
-        cache.setObject(image, forKey: fileName as NSString)
+        let cost = Int(image.size.width * image.size.height * image.scale * image.scale) * 4
+        cache.setObject(image, forKey: fileName as NSString, cost: cost)
         return image
     }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-struct TierListSaveData: Identifiable, Codable {
+struct TierListSaveData: Identifiable, Codable, Equatable {
     let id: UUID
     var title: String
     var rows: [TierRow]

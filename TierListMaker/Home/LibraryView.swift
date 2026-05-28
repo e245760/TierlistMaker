@@ -33,6 +33,7 @@ struct LibraryView: View {
                         LazyVGrid(columns: columns, spacing: 16) {
                             ForEach(store.savedLists) { saveData in
                                 TierListCard(saveData: saveData)
+                                    .equatable()
                                     .onTapGesture { onOpen(saveData) }
                                     .overlay(alignment: .topTrailing) {
                                         Button {
@@ -163,10 +164,15 @@ struct LibraryView: View {
     }
 }
 
-// MARK: - Tier List Card（変更なし）
+// MARK: - Tier List Card
 
-struct TierListCard: View {
+struct TierListCard: View, Equatable {
     let saveData: TierListSaveData
+
+    // Equatable: saveDataが同一であればbodyの再評価をスキップする
+    static func == (lhs: TierListCard, rhs: TierListCard) -> Bool {
+        lhs.saveData == rhs.saveData
+    }
 
     private struct RowColors {
         let label: Color

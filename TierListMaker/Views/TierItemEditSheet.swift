@@ -82,7 +82,7 @@ struct TextItemEditSheet: View {
                     Section("テキスト（最大\(maxLength)文字）") {
                         TextField("アイテム名", text: $editedLabel)
                             .autocorrectionDisabled(true)
-                            .onChange(of: editedLabel) { newValue in
+                            .onChange(of: editedLabel) { _, newValue in
                                 if newValue.count > maxLength {
                                     editedLabel = String(newValue.prefix(maxLength))
                                 }

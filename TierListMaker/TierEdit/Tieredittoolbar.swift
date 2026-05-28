@@ -66,7 +66,7 @@ struct TierEditToolbar: ToolbarContent {
                     .autocorrectionDisabled(true)
                     .textInputAutocapitalization(.never)
                     .onSubmit { finishEditing() }
-                    .onChange(of: title) { newValue in
+                    .onChange(of: title) { _, newValue in
                         if newValue.count > maxLength {
                             title = String(newValue.prefix(maxLength))
                         }

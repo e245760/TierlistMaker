@@ -46,7 +46,7 @@ struct PhotoGridPicker: View {
                     }
                 }
                 .onAppear { containerWidth = geo.size.width }
-                .onChange(of: geo.size.width) { containerWidth = $0 }
+                .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
             }
             .navigationTitle("写真を選ぶ")
             .navigationBarTitleDisplayMode(.inline)

@@ -88,7 +88,7 @@ struct TierRowEditSheet: View {
                         TextField("S, A, B ...", text: $editedName)
                             .autocorrectionDisabled(true)
                             .textInputAutocapitalization(.never)
-                            .onChange(of: editedName) { newValue in
+                            .onChange(of: editedName) { _, newValue in
                                 if newValue.count > TierRow.maxLabelLength {
                                     editedName = String(newValue.prefix(TierRow.maxLabelLength))
                                 }

@@ -106,7 +106,7 @@ struct TierEditFloatingButtons: View {
                 GeometryReader { geo in
                     Color.clear
                         .onAppear       { trayFrameChanged(geo.frame(in: .global)) }
-                        .onChange(of: geo.frame(in: .global)) { trayFrameChanged($0) }
+                        .onChange(of: geo.frame(in: .global)) { _, newValue in trayFrameChanged(newValue) }
                 }
             )
         }

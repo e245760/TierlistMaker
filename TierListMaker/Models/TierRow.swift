@@ -53,7 +53,7 @@ enum LabelTextSize: String, CaseIterable, Codable {
     }
 }
 
-struct TierRow: Identifiable, Codable {
+struct TierRow: Identifiable, Codable, Equatable {
     let id: UUID
     var tierName: String
     var color: String

@@ -301,38 +301,4 @@ struct TierRowView: View {
             }
     }
 
-    // MARK: - ContextMenu Preview（行ドラッグのゴーストに転用）
-
-    var rowPreviewContent: some View {
-        GeometryReader { geo in
-            HStack(spacing: 0) {
-                Text(row.tierName)
-                    .font(tierTheme.fontStyle.font(size: effectiveTextSize.fontSize))
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .frame(width: effectiveLabelSize.width)
-                    .frame(maxHeight: .infinity)
-                    .background(labelColor)
-                    .foregroundColor(textColor)
-                LazyHStack(spacing: 4) {
-                    ForEach(row.items) { item in
-                        TierItemView(item: item)
-                    }
-                }
-                .padding(4)
-                .frame(maxWidth: .infinity, minHeight: 70)
-                .background {
-                    ZStack {
-                        tierTheme.rowBackground
-                        TierPatternView(
-                            pattern: tierTheme.rowPattern,
-                            color: tierTheme.patternColor
-                        )
-                    }
-                }
-            }
-            .frame(width: geo.size.width, height: 70)
-        }
-        .frame(height: 70)
-    }
 }

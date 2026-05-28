@@ -86,7 +86,7 @@ struct TierExportSheet: View {
                     }
                 }
                 .onAppear { containerWidth = geo.size.width }
-                .onChange(of: geo.size.width) { containerWidth = $0 }
+                .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
             }
             .navigationTitle("プレビュー")
             .navigationBarTitleDisplayMode(.inline)
@@ -97,8 +97,8 @@ struct TierExportSheet: View {
             }
         }
         .task { await renderImage() }
-        .onChange(of: selectedRatio)   { _ in Task { await renderImage() } }
-        .onChange(of: showWatermark)   { _ in Task { await renderImage() } }
+        .onChange(of: selectedRatio)   { _, _ in Task { await renderImage() } }
+        .onChange(of: showWatermark)   { _, _ in Task { await renderImage() } }
         .alert("写真へのアクセスを許可してください", isPresented: $showPermissionAlert) {
             Button("設定を開く") {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }

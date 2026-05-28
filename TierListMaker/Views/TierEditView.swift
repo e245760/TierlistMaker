@@ -387,7 +387,7 @@ struct TierEditView: View {
                     onSettings: { showTableEdit = true }
                 )
             }
-            .onChange(of: scenePhase) { phase in
+            .onChange(of: scenePhase) { _, phase in
                 // バックグラウンド移行時に自動保存
                 // 戻るボタン・エクスポートとは独立して動作する
                 if phase == .background {
