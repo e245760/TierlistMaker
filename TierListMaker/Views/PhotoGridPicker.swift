@@ -6,17 +6,18 @@ struct PhotoGridPicker: View {
     let onAdd: (Data) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.displayScale) private var displayScale
 
     @State private var assets: [PHAsset] = []
     @State private var authStatus: PHAuthorizationStatus = .notDetermined
     @State private var selectedIds: Set<String> = []
+    /// GeometryReader で測定したコンテナ幅。初期値はフォールバック用。
+    @State private var containerWidth: CGFloat = 390
 
     private let imageManager = PHCachingImageManager()
 
     // MARK: - UIサイズ（pt基準）
-    private var itemSize: CGFloat {
-        UIScreen.main.bounds.width / 3
-    }
+    private var itemSize: CGFloat { containerWidth / 3 }
 
     // MARK: - Grid（固定）
     private var columns: [GridItem] {
@@ -28,20 +29,24 @@ struct PhotoGridPicker: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                switch authStatus {
-                case .authorized, .limited:
-                    photoGrid
+            GeometryReader { geo in
+                Group {
+                    switch authStatus {
+                    case .authorized, .limited:
+                        photoGrid
 
-                case .denied, .restricted:
-                    deniedView
+                    case .denied, .restricted:
+                        deniedView
 
-                case .notDetermined:
-                    ProgressView()
+                    case .notDetermined:
+                        ProgressView()
 
-                @unknown default:
-                    ProgressView()
+                    @unknown default:
+                        ProgressView()
+                    }
                 }
+                .onAppear { containerWidth = geo.size.width }
+                .onChange(of: geo.size.width) { containerWidth = $0 }
             }
             .navigationTitle("写真を選ぶ")
             .navigationBarTitleDisplayMode(.inline)
@@ -136,7 +141,7 @@ struct PhotoGridPicker: View {
             self.assets = loaded
 
             // 初期キャッシュ（軽量）
-            let pixel = itemSize * UIScreen.main.scale
+            let pixel = self.itemSize * self.displayScale
 
             imageManager.startCachingImages(
                 for: Array(loaded.prefix(150)),
@@ -156,7 +161,7 @@ struct PhotoGridPicker: View {
         options.resizeMode = .fast
         options.isNetworkAccessAllowed = true
 
-        let pixel = itemSize * UIScreen.main.scale
+        let pixel = itemSize * displayScale
         let targetSize = CGSize(width: pixel, height: pixel)
 
         for id in selectedIds {
@@ -211,6 +216,7 @@ struct PhotoGridCell: View {
 
     @State private var image: UIImage?
     @State private var requestId: PHImageRequestID?
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -257,7 +263,7 @@ struct PhotoGridCell: View {
         options.resizeMode = .fast
         options.isNetworkAccessAllowed = true
 
-        let pixel = itemSize * UIScreen.main.scale
+        let pixel = itemSize * displayScale
 
         requestId = manager.requestImage(
             for: asset,

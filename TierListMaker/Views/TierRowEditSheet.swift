@@ -15,7 +15,8 @@ struct TierRowEditSheet: View {
     @State private var editedName: String
     @State private var editedColor: Color
     @State private var editedTextColor: Color
-    @State private var showPaywall = false          // ← Proバッジタップ時に表示
+    @State private var showPaywall = false
+    @State private var showDeleteAlert = false
 
     let vm: TierListViewModel
 
@@ -193,6 +194,15 @@ struct TierRowEditSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }
                 }
+                // 削除ボタン（中央左寄り）
+                ToolbarItem(placement: .bottomBar) {
+                    Button(role: .destructive) {
+                        showDeleteAlert = true
+                    } label: {
+                        Label("この行を削除", systemImage: "trash")
+                            .foregroundColor(.red)
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") {
                         if !editedName.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -204,6 +214,18 @@ struct TierRowEditSheet: View {
                     }
                     .bold()
                 }
+            }
+            .alert("この行を削除しますか？", isPresented: $showDeleteAlert) {
+                Button("削除", role: .destructive) {
+                    dismiss()
+                    // dismiss後に削除することでバインディングの解放順序を安全にする
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        withAnimation(.spring()) { vm.removeRow(id: row.id) }
+                    }
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("この行のアイテムはすべてプールに戻されます。この操作は取り消せません。")
             }
             .sheet(isPresented: $showPaywall) {
                 PaywallSheet()

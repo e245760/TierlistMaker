@@ -5,7 +5,6 @@ internal import UniformTypeIdentifiers
 //
 // アイテムエリアの背景をホバー状態に応じて切り替える。
 // DragHoverState のみを購読するため、selectedItem / draggingItem の変化では再描画されない。
-// hoveredRowId の変化時も、LazyVGrid を含まないこの軽量ビューだけが再描画される。
 
 private struct RowHoverBackground: View {
     let rowId: UUID
@@ -33,10 +32,6 @@ private struct RowHoverBackground: View {
 }
 
 // MARK: - RowBorder
-//
-// 行全体の境界線をホバー・選択状態に応じて切り替える。
-// hoveredRowId（中頻度）と selectedItem（低頻度）の両方を参照するが、
-// 境界線のみを描画する軽量ビューなので再描画コストは小さい。
 
 private struct RowBorder: View {
     let rowId: UUID
@@ -59,15 +54,16 @@ private struct RowBorder: View {
 // MARK: - RowTapOverlay
 //
 // 選択アイテム待機中に行全体をタップ可能にする透明オーバーレイ。
-// DragInteractionState のみを購読する。selectedItem が nil のときはビューを生成しない。
+// 行ドラッグ中は非表示にして競合を避ける。
 
 private struct RowTapOverlay: View {
     let rowId: UUID
     @ObservedObject var dragSel: DragInteractionState
+    @ObservedObject var rowDragState: RowDragState
     let vm: TierListViewModel
 
     var body: some View {
-        if dragSel.selectedItem != nil {
+        if dragSel.selectedItem != nil && rowDragState.draggingRowId == nil {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -82,6 +78,43 @@ private struct RowTapOverlay: View {
     }
 }
 
+// MARK: - RowDragOverlay
+//
+// 行ドラッグ中のビジュアルフィードバックを担う軽量ビュー。
+// RowDragState の draggingRowId / targetRowId のみを購読する（低頻度）。
+// dragLocation は購読しないため、ゴーストの位置更新では再描画されない。
+//
+// ── 表示ルール ──
+//   ドラッグ中の行    : 半透明（opacity 0.4）
+//   ドロップ先の行    : 上端に青い挿入インジケーター
+
+private struct RowDragOverlay: View {
+    let rowId: UUID
+    @ObservedObject var rowDragState: RowDragState
+
+    var body: some View {
+        let isDragging = rowDragState.draggingRowId == rowId
+        let isTarget   = rowDragState.targetRowId   == rowId
+
+        ZStack(alignment: .top) {
+            // ドラッグ中の行を半透明に
+            if isDragging {
+                Color.black.opacity(0.25)
+                    .allowsHitTesting(false)
+            }
+            // ドロップ先に青い挿入ライン
+            if isTarget {
+                Rectangle()
+                    .fill(Color.blue)
+                    .frame(height: 3)
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(.easeInOut(duration: 0.12), value: isDragging)
+        .animation(.easeInOut(duration: 0.12), value: isTarget)
+    }
+}
+
 // MARK: - TierRowView
 
 struct TierRowView: View {
@@ -91,23 +124,26 @@ struct TierRowView: View {
     @ObservedObject var vm: TierListViewModel
 
     let dragPos: DragPositionState
-    // dragHover / dragSel は let（@ObservedObject ではない）。
-    // 再描画は上記の子ビューが各自担うため、TierRowView 本体は
-    // row / vm の変化時のみ再描画される。
     let dragHover: DragHoverState
     let dragSel: DragInteractionState
+    // 行ドラッグ状態（let = TierRowView 本体は非購読、子ビューが各自購読）
+    let rowDragState: RowDragState
 
     let rowFrames: [UUID: CGRect]
     let trayFrame: CGRect
 
     @State private var showEditSheet = false
-    @State private var showDeleteAlert = false
+
+    // ラベルドラッグ用ローカル状態
+    @State private var labelLongPressTask: Task<Void, Never>? = nil
+    @State private var isLabelDragging = false
+    private let labelLongPressDuration: UInt64 = 400_000_000
 
     @Environment(\.tierTheme) private var tierTheme
 
-    private var effectiveLabelSize: LabelSize { vm.defaultLabelSize }
+    private var effectiveLabelSize: LabelSize   { vm.defaultLabelSize }
     private var effectiveTextSize: LabelTextSize { vm.defaultLabelTextSize }
-    private var effectiveItemSize: ItemSize { vm.defaultItemSize }
+    private var effectiveItemSize: ItemSize      { vm.defaultItemSize }
 
     private var labelColor: Color { Color(hex: row.color) }
     private var textColor:  Color { Color(hex: row.textColorHex) }
@@ -118,24 +154,23 @@ struct TierRowView: View {
                 tierLabel
                 itemsArea
             }
-            // 選択アイテム待機中のタップ領域（子ビューで購読）
-            RowTapOverlay(rowId: rowId, dragSel: dragSel, vm: vm)
+            // 選択アイテム待機中のタップ領域（行ドラッグ中は非表示）
+            RowTapOverlay(rowId: rowId, dragSel: dragSel, rowDragState: rowDragState, vm: vm)
         }
         .clipped()
         .overlay {
-            // ホバー・選択状態に応じたボーダー（子ビューで購読）
             RowBorder(rowId: rowId, dragHover: dragHover, dragSel: dragSel)
+        }
+        .overlay {
+            // 行ドラッグのビジュアルフィードバック
+            RowDragOverlay(rowId: rowId, rowDragState: rowDragState)
         }
         .sheet(isPresented: $showEditSheet) {
             TierRowEditSheet(row: $row, vm: vm)
         }
-        .alert("この行を削除しますか？", isPresented: $showDeleteAlert) {
-            Button("削除", role: .destructive) {
-                withAnimation(.spring()) { vm.removeRow(id: rowId) }
-            }
-            Button("キャンセル", role: .cancel) {}
-        } message: {
-            Text("この操作は取り消せません。")
+        .onDisappear {
+            labelLongPressTask?.cancel()
+            labelLongPressTask = nil
         }
     }
 
@@ -166,7 +201,6 @@ struct TierRowView: View {
                     dragSel: dragSel,
                     trayFrame: trayFrame
                 )
-                // opacity は DraggableTierItem 内の isSelectedItem / isDraggingThis で管理
                 .frame(
                     width: effectiveItemSize.width,
                     height: effectiveItemSize.height
@@ -176,40 +210,25 @@ struct TierRowView: View {
         .padding(4)
         .frame(maxWidth: .infinity, minHeight: 70, alignment: .topLeading)
         .background {
-            // 背景は RowHoverBackground が購読・描画（TierRowView 本体は非購読）
             RowHoverBackground(rowId: rowId, dragHover: dragHover, tierTheme: tierTheme)
         }
         .onDrop(of: [.text], isTargeted: nil) { _ in false }
     }
 
     // MARK: - ラベルView
+    //
+    // ── ジェスチャー設計 ──
+    //   タップ（短押し）        → 編集シートを開く
+    //   長押し（400ms）+ ドラッグ → 行の並び替え
+    //
+    // DragGesture(minimumDistance: 0) で両方を1つのジェスチャーで処理する。
+    // onEnded 時に isLabelDragging が false なら「タップ」と判定。
+    //
+    // ドラッグヒント：ラベル右端に三本線アイコンを表示。
+    // ドラッグ中のラベル自体は RowDragOverlay が半透明化する。
 
     private var tierLabel: some View {
-        Text(row.tierName)
-            .font(tierTheme.fontStyle.font(size: effectiveTextSize.fontSize))
-            .minimumScaleFactor(0.5)
-            .lineLimit(1)
-            .frame(width: effectiveLabelSize.width)
-            .frame(maxHeight: .infinity)
-            .background(labelColor)
-            .foregroundColor(textColor)
-            .onTapGesture(count: 2) { showEditSheet = true }
-            .contextMenu {
-                Button { showEditSheet = true } label: {
-                    Label("編集", systemImage: "pencil")
-                }
-                Button(role: .destructive) { showDeleteAlert = true } label: {
-                    Label("削除", systemImage: "trash")
-                }
-            } preview: {
-                previewContent
-            }
-    }
-
-    // MARK: - ContextMenu Preview
-
-    private var previewContent: some View {
-        HStack(spacing: 0) {
+        ZStack(alignment: .trailing) {
             Text(row.tierName)
                 .font(tierTheme.fontStyle.font(size: effectiveTextSize.fontSize))
                 .minimumScaleFactor(0.5)
@@ -218,23 +237,102 @@ struct TierRowView: View {
                 .frame(maxHeight: .infinity)
                 .background(labelColor)
                 .foregroundColor(textColor)
-            LazyHStack(spacing: 4) {
-                ForEach(row.items) { item in
-                    TierItemView(item: item)
-                }
-            }
-            .padding(4)
-            .frame(maxWidth: .infinity, minHeight: 70)
-            .background {
-                ZStack {
-                    tierTheme.rowBackground
-                    TierPatternView(
-                        pattern: tierTheme.rowPattern,
-                        color: tierTheme.patternColor
-                    )
-                }
-            }
+
+            // ドラッグ可能を示すハンドルアイコン（右端に小さく表示）
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(textColor.opacity(0.5))
+                .padding(.trailing, 4)
         }
-        .frame(width: UIScreen.main.bounds.width, height: 70)
+        .gesture(labelDragGesture)
+    }
+
+    // MARK: - ラベルドラッグジェスチャー
+
+    private var labelDragGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
+            .onChanged { value in
+                // 長押しタスクをまだ起動していなければ起動
+                if labelLongPressTask == nil {
+                    labelLongPressTask = Task { @MainActor in
+                        do {
+                            try await Task.sleep(nanoseconds: labelLongPressDuration)
+                            guard !isLabelDragging else { return }
+                            isLabelDragging = true
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            withAnimation(.spring()) {
+                                rowDragState.draggingRowId = rowId
+                            }
+                        } catch {}
+                    }
+                }
+
+                guard isLabelDragging else { return }
+
+                // ゴーストビューの位置を更新
+                rowDragState.dragLocation = value.location
+
+                // ホバー中の行を特定（自分自身は除く）
+                rowDragState.targetRowId = rowFrames
+                    .filter { $0.key != rowId }
+                    .first(where: { $0.value.contains(value.location) })?
+                    .key
+            }
+            .onEnded { _ in
+                labelLongPressTask?.cancel()
+                labelLongPressTask = nil
+
+                if isLabelDragging {
+                    // 行の並び替えを確定
+                    if let targetId = rowDragState.targetRowId {
+                        withAnimation(.spring()) {
+                            vm.moveRow(fromId: rowId, toId: targetId)
+                        }
+                    }
+                    isLabelDragging = false
+                    withAnimation(.spring()) {
+                        rowDragState.draggingRowId = nil
+                        rowDragState.targetRowId   = nil
+                    }
+                } else {
+                    // 長押し未満 = タップ → 編集シートを開く
+                    showEditSheet = true
+                }
+            }
+    }
+
+    // MARK: - ContextMenu Preview（行ドラッグのゴーストに転用）
+
+    var rowPreviewContent: some View {
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                Text(row.tierName)
+                    .font(tierTheme.fontStyle.font(size: effectiveTextSize.fontSize))
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .frame(width: effectiveLabelSize.width)
+                    .frame(maxHeight: .infinity)
+                    .background(labelColor)
+                    .foregroundColor(textColor)
+                LazyHStack(spacing: 4) {
+                    ForEach(row.items) { item in
+                        TierItemView(item: item)
+                    }
+                }
+                .padding(4)
+                .frame(maxWidth: .infinity, minHeight: 70)
+                .background {
+                    ZStack {
+                        tierTheme.rowBackground
+                        TierPatternView(
+                            pattern: tierTheme.rowPattern,
+                            color: tierTheme.patternColor
+                        )
+                    }
+                }
+            }
+            .frame(width: geo.size.width, height: 70)
+        }
+        .frame(height: 70)
     }
 }

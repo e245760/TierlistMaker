@@ -25,6 +25,7 @@ private struct TierRowListView: View {
     let dragPos: DragPositionState
     let dragSel: DragInteractionState
     let dragHover: DragHoverState
+    let rowDragState: RowDragState
     let rowFrames: [UUID: CGRect]
     let trayFrame: CGRect
     let onRowFramesChanged: ([UUID: CGRect]) -> Void
@@ -41,6 +42,7 @@ private struct TierRowListView: View {
                             dragPos: dragPos,
                             dragHover: dragHover,
                             dragSel: dragSel,
+                            rowDragState: rowDragState,
                             rowFrames: rowFrames,
                             trayFrame: trayFrame
                         )
@@ -145,7 +147,7 @@ private extension View {
     }
 }
 
-// MARK: - ドラッグ Ghost View
+// MARK: - ドラッグ Ghost View（アイテム）
 //
 // dragPos（毎フレーム）と dragSel（ドラッグ開始/終了）を購読する。
 // TierEditView.body から切り出すことで、dragLocation 変化が
@@ -165,6 +167,42 @@ private struct DragGhostView: View {
                 .position(
                     x: dragPos.dragLocation.x - geoMinX,
                     y: dragPos.dragLocation.y - geoMinY
+                )
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+// MARK: - 行ドラッグ Ghost View
+//
+// RowDragState（dragLocation は高頻度）のみを購読する独立ビュー。
+// TierRowView 本体を再描画させないために切り出す。
+// ラベル部分だけをゴーストとして指先に追従させる。
+
+private struct RowDragGhostView: View {
+    @ObservedObject var rowDragState: RowDragState
+    let vm: TierListViewModel
+    let rows: [TierRow]
+    let geoMinX: CGFloat
+    let geoMinY: CGFloat
+
+    @Environment(\.tierTheme) private var tierTheme
+
+    var body: some View {
+        if let id = rowDragState.draggingRowId,
+           let row = rows.first(where: { $0.id == id }) {
+            Text(row.tierName)
+                .font(tierTheme.fontStyle.font(size: vm.defaultLabelTextSize.fontSize))
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .frame(width: vm.defaultLabelSize.width, height: 65)
+                .background(Color(hex: row.color))
+                .foregroundColor(Color(hex: row.textColorHex))
+                .scaleEffect(1.08)
+                .shadow(color: .black.opacity(0.35), radius: 10)
+                .position(
+                    x: rowDragState.dragLocation.x - geoMinX,
+                    y: rowDragState.dragLocation.y - geoMinY
                 )
                 .allowsHitTesting(false)
         }
@@ -221,6 +259,7 @@ struct TierEditView: View {
     @StateObject private var dragPos = DragPositionState()
     @StateObject private var dragSel = DragInteractionState()
     @StateObject private var dragHover = DragHoverState()
+    @StateObject private var rowDragState = RowDragState()
 
     // MARK: - フレーム
 
@@ -245,6 +284,7 @@ struct TierEditView: View {
                         dragPos: dragPos,
                         dragSel: dragSel,
                         dragHover: dragHover,
+                        rowDragState: rowDragState,
                         rowFrames: rowFrames,
                         trayFrame: trayFrame,
                         onRowFramesChanged: { rowFrames = $0 }
@@ -312,7 +352,7 @@ struct TierEditView: View {
                     )
                     .zIndex(6)
 
-                    // ── ドラッグ Ghost ──
+                    // ── ドラッグ Ghost（アイテム）──
 
                     DragGhostView(
                         dragPos: dragPos,
@@ -321,6 +361,18 @@ struct TierEditView: View {
                         geoMinY: geo.frame(in: .global).minY
                     )
                     .zIndex(99)
+
+                    // ── ドラッグ Ghost（行）──
+
+                    RowDragGhostView(
+                        rowDragState: rowDragState,
+                        vm: vm,
+                        rows: vm.rows,
+                        geoMinX: geo.frame(in: .global).minX,
+                        geoMinY: geo.frame(in: .global).minY
+                    )
+                    .environment(\.tierTheme, vm.tierTheme)
+                    .zIndex(98)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)

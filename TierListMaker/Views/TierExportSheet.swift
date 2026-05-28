@@ -54,6 +54,7 @@ struct TierExportSheet: View {
     let title: String
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.displayScale) private var displayScale
 
     // Pro判定（ウォーターマークトグルの表示制御に使用）
     @EnvironmentObject private var pm: PurchaseManager
@@ -64,21 +65,28 @@ struct TierExportSheet: View {
     @State private var isSaving    = false
     @State private var savedOK     = false
     @State private var showPermissionAlert = false
+    @State private var showShareSheet = false
+    /// GeometryReader で測定したコンテナ幅。初期値はフォールバック用。
+    @State private var containerWidth: CGFloat = 390
     /// Pro購入済みユーザーのみ切り替え可能。無料ユーザーは常に true（表示）。
     @State private var showWatermark: Bool = true
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color(.systemGroupedBackground).ignoresSafeArea()
-                if isRendering {
-                    renderingPlaceholder
-                } else if let image = renderedImage {
-                    previewContent(image: image)
-                } else {
-                    Text("プレビューの生成に失敗しました")
-                        .foregroundColor(.secondary)
+            GeometryReader { geo in
+                ZStack {
+                    Color(.systemGroupedBackground).ignoresSafeArea()
+                    if isRendering {
+                        renderingPlaceholder
+                    } else if let image = renderedImage {
+                        previewContent(image: image)
+                    } else {
+                        Text("プレビューの生成に失敗しました")
+                            .foregroundColor(.secondary)
+                    }
                 }
+                .onAppear { containerWidth = geo.size.width }
+                .onChange(of: geo.size.width) { containerWidth = $0 }
             }
             .navigationTitle("プレビュー")
             .navigationBarTitleDisplayMode(.inline)
@@ -168,29 +176,52 @@ struct TierExportSheet: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 12)
 
-                Button {
-                    Task { await requestAndSave() }
-                } label: {
-                    HStack(spacing: 10) {
-                        if isSaving {
-                            ProgressView().tint(.white)
-                        } else {
-                            Image(systemName: savedOK
-                                  ? "checkmark.circle.fill"
-                                  : "square.and.arrow.down.fill")
+                // ── アクションボタン（写真保存 ＋ シェア） ──
+                HStack(spacing: 12) {
+                    // 写真アプリに保存
+                    Button {
+                        Task { await requestAndSave() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isSaving {
+                                ProgressView().tint(.white)
+                            } else {
+                                Image(systemName: savedOK
+                                      ? "checkmark.circle.fill"
+                                      : "square.and.arrow.down.fill")
+                            }
+                            Text(saveButtonLabel).bold()
                         }
-                        Text(saveButtonLabel).bold()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(savedOK ? Color.green : Color.blue)
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .animation(.spring(), value: savedOK)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(savedOK ? Color.green : Color.blue)
-                    .foregroundColor(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 16)
-                    .animation(.spring(), value: savedOK)
+                    .disabled(isSaving || savedOK || isRendering)
+
+                    // シェアシート
+                    Button {
+                        showShareSheet = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.body.bold())
+                            .frame(width: 52, height: 52)
+                            .background(Color(.systemGray5))
+                            .foregroundColor(.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .disabled(isRendering || renderedImage == nil)
+                    .sheet(isPresented: $showShareSheet) {
+                        if let image = renderedImage,
+                           let pngData = image.pngData() {
+                            ShareSheet(items: [pngData])
+                        }
+                    }
                 }
-                .disabled(isSaving || savedOK || isRendering)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
             }
         }
     }
@@ -287,9 +318,8 @@ struct TierExportSheet: View {
         isRendering = true
         savedOK     = false
 
-        let scale       = UIScreen.main.scale
-        let screenWidth = UIScreen.main.bounds.width
-        let canvasSize  = selectedRatio.canvasSize(for: screenWidth)
+        let scale       = displayScale
+        let canvasSize  = selectedRatio.canvasSize(for: containerWidth)
 
         // Phase 1: 正確な自然高さを計測（ImageRenderer なのでメインスレッド必須）
         guard let probeImage = render(canvasWidth: canvasSize.width,
@@ -523,4 +553,20 @@ private struct CheckerboardBackground: View {
             }
         }
     }
+}
+
+// MARK: - ShareSheet
+//
+// UIActivityViewController を SwiftUI でラップする。
+// items には PNG Data を渡す。AirDrop・メッセージ・SNS など
+// システムが対応するすべての共有先が自動的に表示される。
+
+private struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

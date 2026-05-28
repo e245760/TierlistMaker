@@ -27,7 +27,7 @@ struct TierListSnapshotView: View {
         defaultLabelTextSize: LabelTextSize,
         defaultItemSize: ItemSize,
         tierTheme: TierTheme,
-        canvasWidth: CGFloat = UIScreen.main.bounds.width,
+        canvasWidth: CGFloat,
         targetHeight: CGFloat? = nil,
         showWatermark: Bool = true
     ) {

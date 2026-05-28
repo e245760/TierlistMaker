@@ -161,6 +161,20 @@ class TierListViewModel: ObservableObject {
         }
     }
 
+    /// 行を別の位置に移動する。
+    /// fromId の行を toId の行の位置まで移動し、それ以外の行の順序は維持する。
+    func moveRow(fromId: UUID, toId: UUID) {
+        guard
+            let fromIdx = rows.firstIndex(where: { $0.id == fromId }),
+            let toIdx   = rows.firstIndex(where: { $0.id == toId }),
+            fromIdx != toIdx
+        else { return }
+        rows.move(
+            fromOffsets: IndexSet(integer: fromIdx),
+            toOffset: toIdx > fromIdx ? toIdx + 1 : toIdx
+        )
+    }
+
     func rowIndex(for itemId: UUID) -> Int? {
         rows.firstIndex(where: { $0.items.contains(where: { $0.id == itemId }) })
     }

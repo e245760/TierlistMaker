@@ -115,8 +115,10 @@ final class PurchaseManager: ObservableObject {
 
     private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
-        case .unverified:
-            throw PurchaseError.failedVerification
+        case .unverified(_, let error):
+            // VerificationError の説明文を関連値として保持する。
+            // 握り潰さずに渡すことでデバッグ・ログ解析が容易になる。
+            throw PurchaseError.failedVerification(reason: error.localizedDescription)
         case .verified(let value):
             return value
         }
@@ -140,16 +142,16 @@ final class PurchaseManager: ObservableObject {
 
 enum PurchaseError: LocalizedError {
     case productNotFound
-    case failedVerification
+    case failedVerification(reason: String)
     case pending
     case cancelled
 
     var errorDescription: String? {
         switch self {
-        case .productNotFound:    return "プロダクト情報を取得できませんでした"
-        case .failedVerification: return "購入の検証に失敗しました"
-        case .pending:            return "購入が保留中です。承認後に反映されます"
-        case .cancelled:          return nil   // キャンセルはエラー表示不要
+        case .productNotFound:              return "プロダクト情報を取得できませんでした"
+        case .failedVerification(let reason): return "購入の検証に失敗しました（\(reason)）"
+        case .pending:                      return "購入が保留中です。承認後に反映されます"
+        case .cancelled:                    return nil   // キャンセルはエラー表示不要
         }
     }
 }
