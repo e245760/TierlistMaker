@@ -81,6 +81,7 @@ struct DraggableTierItem: View {
             .onDisappear {
                 longPressTask?.cancel()
                 longPressTask = nil
+                isDragging = false
             }
     }
 }

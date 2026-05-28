@@ -47,7 +47,23 @@ class TierListViewModel: ObservableObject {
     }
 
     func addRow() {
-        rows.append(TierRow(tierName: "New", color: "#AAAAAA"))
+        rows.append(TierRow(tierName: "New", color: nextRowColor()))
+    }
+
+    // MARK: - 行追加カラー選択
+    //
+    // TierRowEditSheet のプリセット8色の中から、
+    // 既存行で未使用の色を先頭から順に選ぶ。
+    // すべて使用済みの場合は先頭色にフォールバックする。
+
+    private func nextRowColor() -> String {
+        let palette = [
+            "#FF7F7F", "#FFBF7F", "#FFFF7F", "#7FFF7F",
+            "#7FBFFF", "#BF7FFF", "#FF7FBF", "#7FFFFF",
+        ]
+        let usedColors = Set(rows.map { $0.color.uppercased() })
+        let found = palette.first { !usedColors.contains($0.uppercased()) }
+        return found ?? palette[0]
     }
 
     func applyLabelSizeToAll(_ size: LabelSize) {

@@ -217,10 +217,12 @@ struct TierRowEditSheet: View {
             }
             .alert("この行を削除しますか？", isPresented: $showDeleteAlert) {
                 Button("削除", role: .destructive) {
+                    // dismiss後にバインディングが解放されても安全なようIDをコピーしておく
+                    let rowId = row.id
                     dismiss()
                     // dismiss後に削除することでバインディングの解放順序を安全にする
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        withAnimation(.spring()) { vm.removeRow(id: row.id) }
+                        withAnimation(.spring()) { vm.removeRow(id: rowId) }
                     }
                 }
                 Button("キャンセル", role: .cancel) {}
