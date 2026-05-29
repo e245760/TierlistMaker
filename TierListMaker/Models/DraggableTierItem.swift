@@ -63,15 +63,20 @@ struct DraggableTierItem: View {
                         if isDragging {
                             if trayFrame.contains(value.location) {
                                 withAnimation(.spring()) { vm.returnToPool(item) }
+                                // ↓ 追加
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
                             } else if let targetId = rowFrames.first(where: {
                                 $0.value.contains(value.location)
                             })?.key {
                                 withAnimation(.spring()) { vm.moveItem(item, toRowId: targetId) }
+                                // ↓ 追加
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
                             }
+                            // ドロップ先がなかった場合（宙に離した）は何もしない — フィードバックなし
                             isDragging = false
                             withAnimation(.spring()) {
                                 dragSel.draggingItem = nil
-                                dragHover.hoveredRowId = nil  // dragSel → dragHover
+                                dragHover.hoveredRowId = nil
                             }
                         } else {
                             onTap()

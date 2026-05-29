@@ -177,6 +177,14 @@ class TierListViewModel: ObservableObject {
         }
     }
 
+    /// プール内のアイテムをすべて削除する。
+    /// 画像アイテムは ImageFileStore からも削除してディスクを解放する。
+    func clearPool() {
+        let fileNames = pool.compactMap { $0.imageFileName }
+        ImageFileStore.shared.delete(fileNames: fileNames)
+        pool.removeAll()
+    }
+
     /// 行を別の位置に移動する。
     /// fromId の行を toId の行の位置まで移動し、それ以外の行の順序は維持する。
     func moveRow(fromId: UUID, toId: UUID) {

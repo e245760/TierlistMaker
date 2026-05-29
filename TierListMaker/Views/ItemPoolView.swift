@@ -13,6 +13,7 @@ struct ItemPoolView: View {
     let trayFrame: CGRect
 
     @State private var dragOffset: CGFloat = 0
+    @State private var showClearAlert = false
 
     @Environment(\.tierTheme) private var tierTheme
 
@@ -53,9 +54,35 @@ struct ItemPoolView: View {
             HStack {
                 Text("未分類").font(.headline)
                 Spacer()
+                if !vm.pool.isEmpty {
+                    Button(role: .destructive) {
+                        showClearAlert = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "trash")
+                                .font(.caption.bold())
+                            Text("すべて削除")
+                                .font(.caption.bold())
+                        }
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.red.opacity(0.1))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+            .alert("未分類をすべて削除しますか？", isPresented: $showClearAlert) {
+                Button("削除", role: .destructive) {
+                    withAnimation(.spring()) { vm.clearPool() }
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("プール内の\(vm.pool.count)個のアイテムがすべて削除されます。この操作は取り消せません。")
+            }
 
             Divider()
 

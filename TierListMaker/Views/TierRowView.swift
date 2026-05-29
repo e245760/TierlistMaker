@@ -187,31 +187,39 @@ struct TierRowView: View {
             )
         ]
 
-        return LazyVGrid(columns: columns, spacing: 4) {
-            ForEach(row.items) { item in
-                DraggableTierItem(
-                    item: item,
-                    vm: vm,
-                    rowFrames: rowFrames,
-                    onTap: {
-                        withAnimation(.spring()) { dragSel.selectedItem = item }
-                    },
-                    dragPos: dragPos,
-                    dragHover: dragHover,
-                    dragSel: dragSel,
-                    trayFrame: trayFrame
-                )
-                .frame(
-                    width: effectiveItemSize.width,
-                    height: effectiveItemSize.height
-                )
+        return ZStack {
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(row.items) { item in
+                    DraggableTierItem(
+                        item: item,
+                        vm: vm,
+                        rowFrames: rowFrames,
+                        onTap: {
+                            withAnimation(.spring()) { dragSel.selectedItem = item }
+                        },
+                        dragPos: dragPos,
+                        dragHover: dragHover,
+                        dragSel: dragSel,
+                        trayFrame: trayFrame
+                    )
+                    .frame(
+                        width: effectiveItemSize.width,
+                        height: effectiveItemSize.height
+                    )
+                }
+            }
+            .padding(4)
+
+            // 選択待機中かつアイテムが空の行にプレースホルダーを表示
+            if dragSel.selectedItem != nil && row.items.isEmpty {
+                EmptyRowPlaceholder()
             }
         }
-        .padding(4)
         .frame(maxWidth: .infinity, minHeight: 70, alignment: .topLeading)
         .background {
             RowHoverBackground(rowId: rowId, dragHover: dragHover, tierTheme: tierTheme)
         }
+        .animation(.spring(), value: dragSel.selectedItem == nil)
         .onDrop(of: [.text], isTargeted: nil) { _ in false }
     }
 
@@ -301,4 +309,23 @@ struct TierRowView: View {
             }
     }
 
+}
+
+// MARK: - EmptyRowPlaceholder
+//
+// アイテム選択待機中に、アイテムが空の行へ配置を促すプレースホルダー。
+// 表示判定は親（itemsArea）が行い、このビュー自体は見た目のみを担う。
+
+private struct EmptyRowPlaceholder: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.down.circle")
+                .font(.caption.bold())
+            Text("ここに配置")
+                .font(.caption.bold())
+        }
+        .foregroundColor(.blue.opacity(0.5))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+    }
 }

@@ -41,7 +41,7 @@ struct TableEditSheet: View {
 
                         HStack(spacing: 0) {
                             Text("S")
-                                .font(.system(size: editedLabelTextSize.fontSize, weight: .bold))
+                                .font(editedTierTheme.fontStyle.font(size: editedLabelTextSize.fontSize))
                                 .minimumScaleFactor(0.5)
                                 .lineLimit(1)
                                 .frame(width: editedLabelSize.width)
@@ -70,6 +70,7 @@ struct TableEditSheet: View {
                         .animation(.spring(), value: editedLabelTextSize)
                         .animation(.spring(), value: editedItemSize)
                         .animation(.spring(), value: editedItemTextSize)
+                        .animation(.spring(), value: editedTierTheme)
                         .environment(\.colorScheme, editedTierTheme.colorScheme)
                         .environment(\.tierTheme, editedTierTheme)
                     }
