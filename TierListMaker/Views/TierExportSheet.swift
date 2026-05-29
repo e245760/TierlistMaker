@@ -72,6 +72,11 @@ struct TierExportSheet: View {
     /// Pro購入済みユーザーのみ切り替え可能。無料ユーザーは常に true（表示）。
     @State private var showWatermark: Bool = true
 
+    /// レンダリング・UI に使う実効値。
+    /// 非Pro の場合は showWatermark の値に関わらず強制的に true にする。
+    /// isPro が途中で変化した場合（シート表示中に購入完了）も正しく動作する。
+    private var effectiveShowWatermark: Bool { !pm.isPro ? true : showWatermark }
+
     var body: some View {
         NavigationStack {
             GeometryReader { geo in
@@ -104,6 +109,13 @@ struct TierExportSheet: View {
         .onChange(of: containerWidth)  { _, _ in Task { await renderImage() } }
         .onChange(of: selectedRatio)   { _, _ in Task { await renderImage() } }
         .onChange(of: showWatermark)   { _, _ in Task { await renderImage() } }
+        // isPro が変化した場合（シート表示中に購入完了）:
+        //   showWatermark を true にリセットしてからリレンダリングする。
+        //   購入直後はウォーターマーク表示状態から始め、Pro ユーザーが自分でOFFにできる。
+        .onChange(of: pm.isPro) { _, _ in
+            showWatermark = true
+            Task { await renderImage() }
+        }
         .alert("写真へのアクセスを許可してください", isPresented: $showPermissionAlert) {
             Button("設定を開く") {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
@@ -247,9 +259,9 @@ struct TierExportSheet: View {
     private var watermarkToggleRow: some View {
         HStack(spacing: 12) {
             // アイコン＋ラベル
-            Image(systemName: showWatermark ? "star.fill" : "star.slash")
+            Image(systemName: effectiveShowWatermark ? "star.fill" : "star.slash")
                 .font(.subheadline)
-                .foregroundColor(showWatermark ? .blue : .secondary)
+                .foregroundColor(effectiveShowWatermark ? .blue : .secondary)
                 .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -257,7 +269,7 @@ struct TierExportSheet: View {
                     .font(.subheadline.bold())
                     .foregroundColor(.primary)
                 Text(pm.isPro
-                     ? (showWatermark ? "画像に表示されます" : "画像に表示されません")
+                     ? (effectiveShowWatermark ? "画像に表示されます" : "画像に表示されません")
                      : "プロにアップグレードすると非表示にできます")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -422,7 +434,7 @@ struct TierExportSheet: View {
             tierTheme: vm.tierTheme,
             canvasWidth: canvasWidth,
             targetHeight: targetHeight,
-            showWatermark: showWatermark
+            showWatermark: effectiveShowWatermark
         )
         let renderer = ImageRenderer(content: snapshot)
         renderer.scale = scale
@@ -475,8 +487,22 @@ struct TierExportSheet: View {
         let hiBase   = defaultLabelSize.width
                      + CGFloat(max(maxItems, 1)) * (defaultItemSize.width + 4)
                      + 8
+
+        // vw >= hiBase では全アイテムが1行に収まり naturalHeight = minTotalH で一定になる。
+        // この定常域で f(vw) = canvasWidth となる vw を数学的に導出して上界とする。
+        //   vw* = canvasWidth × minTotalH / canvasHeight
+        // hiBase の方が大きければ f(hiBase) >= canvasWidth が保証されるため hiBase が上界。
+        // +1.0 は浮動小数点誤差に対するバッファ。
+        let minTotalH = computeNaturalHeight(
+            virtualWidth: hiBase,
+            rows: rows,
+            defaultLabelSize: defaultLabelSize,
+            defaultItemSize: defaultItemSize
+        )
+        let hiExact = canvasSize.width * minTotalH / canvasSize.height
+
         var lo: CGFloat = canvasSize.width
-        var hi: CGFloat = max(hiBase, canvasSize.width * 3)
+        var hi: CGFloat = max(hiBase, hiExact) + 1.0
 
         for _ in 0..<64 {
             guard hi - lo > 0.25 else { break }

@@ -167,6 +167,11 @@ struct TierListSnapshotView: View {
         .background(tierTheme.rowBackground)
         .environment(\.colorScheme, tierTheme.colorScheme)
         .environment(\.tierTheme, tierTheme)
+        // ImageRenderer は .task を実行しないため、
+        // syncImageLoading を true にして同期ロードに切り替える。
+        // これにより TierItemView が ImageFileStore.load() を直接呼び、
+        // 画像がグレーのプレースホルダーにならない。
+        .environment(\.syncImageLoading, true)
     }
 
     // MARK: - 行ビュー

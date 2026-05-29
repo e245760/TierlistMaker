@@ -363,7 +363,15 @@ struct ImageItemEditSheet: View {
                         item.cropScale            = editedCropScale
                         item.cropContain          = editedCropContain
                         item.cropTransparentBg    = editedCropTransparentBg
-                        dismiss()
+                        // dismiss() だと内部の NavigationStack がインターセプトして
+                        // showItemEdit が true のまま残り onDismiss が発火しない。
+                        // dismissSheet 経由で TierItemEditSheet の dismiss() を呼び、
+                        // シートを確実に閉じて onDismiss（selectedItem 更新）を発火させる。
+                        if let dismissSheet {
+                            dismissSheet()
+                        } else {
+                            dismiss()
+                        }
                     }
                     .bold()
                 }
