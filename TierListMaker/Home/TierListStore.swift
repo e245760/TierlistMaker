@@ -77,6 +77,74 @@ class TierListStore: ObservableObject {
         removeFileAndUpdateIndex(id: id)
     }
 
+    /// 指定した表を複製して先頭に追加する。
+    /// 画像アイテムはファイルごとコピーして、複製元と独立したファイルを持つ。
+    /// 複製元を削除しても複製先の画像は残り、逆も同様。
+    func duplicate(id: UUID) {
+        guard let original = savedLists.first(where: { $0.id == id }) else { return }
+
+        let newId  = UUID()
+        let now    = Date()
+
+        // 画像ファイルをコピーし、新しいアイテムIDでファイル名を付け直す
+        func duplicatedItem(_ item: TierItem) -> TierItem {
+            var newItem = item
+            newItem = TierItem(
+                id: UUID(),
+                label: item.label,
+                imageFileName: nil,
+                itemSize: item.itemSize,
+                textSize: item.textSize,
+                textColorHex: item.textColorHex,
+                backgroundColorHex: item.backgroundColorHex,
+                isFlippedHorizontal: item.isFlippedHorizontal,
+                isFlippedVertical: item.isFlippedVertical,
+                cropOffsetX: item.cropOffsetX,
+                cropOffsetY: item.cropOffsetY,
+                cropScale: item.cropScale,
+                cropContain: item.cropContain,
+                cropTransparentBg: item.cropTransparentBg
+            )
+            if let srcName = item.imageFileName,
+               let image   = ImageFileStore.shared.load(fileName: srcName),
+               let data    = image.jpegData(compressionQuality: 0.9) {
+                let dstName = ImageFileStore.shared.fileName(for: newItem.id)
+                ImageFileStore.shared.save(data, fileName: dstName)
+                newItem.imageFileName = dstName
+            }
+            return newItem
+        }
+
+        let newRows = original.rows.map { row -> TierRow in
+            var r   = row
+            r       = TierRow(
+                id: UUID(),
+                tierName: row.tierName,
+                color: row.color,
+                textColorHex: row.textColorHex,
+                items: row.items.map { duplicatedItem($0) }
+            )
+            return r
+        }
+        let newPool = original.pool.map { duplicatedItem($0) }
+
+        let copy = TierListSaveData(
+            id: newId,
+            title: original.title + "のコピー",
+            rows: newRows,
+            pool: newPool,
+            defaultLabelSize: original.defaultLabelSize,
+            defaultLabelTextSize: original.defaultLabelTextSize,
+            defaultItemSize: original.defaultItemSize,
+            defaultItemTextSize: original.defaultItemTextSize,
+            tierTheme: original.tierTheme,
+            addedAssetIds: [],   // コピー元の assetId 管理は引き継がない
+            createdAt: now,
+            updatedAt: now
+        )
+        upsert(copy)
+    }
+
     // MARK: - 画像ファイル削除
 
     private func deleteImageFiles(for saveData: TierListSaveData) {

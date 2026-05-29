@@ -62,19 +62,22 @@ private struct RowTapOverlay: View {
     @ObservedObject var rowDragState: RowDragState
     let vm: TierListViewModel
 
+    private var isActive: Bool {
+        dragSel.selectedItem != nil && rowDragState.draggingRowId == nil
+    }
+
     var body: some View {
-        if dragSel.selectedItem != nil && rowDragState.draggingRowId == nil {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if let item = dragSel.selectedItem {
-                        withAnimation(.spring()) {
-                            vm.moveItem(item, toRowId: rowId)
-                            dragSel.selectedItem = nil
-                        }
-                    }
+        Color.clear
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard let item = dragSel.selectedItem else { return }
+                withAnimation(.spring()) {
+                    vm.moveItem(item, toRowId: rowId)
+                    dragSel.selectedItem = nil
                 }
-        }
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+            .allowsHitTesting(isActive)
     }
 }
 

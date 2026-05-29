@@ -4,13 +4,8 @@ struct ItemPoolView: View {
     @ObservedObject var vm: TierListViewModel
     @Binding var showPool: Bool
 
-    // ItemPoolView 自身は dragPos/dragSel の値を描画に使わない。
-    // DraggableTierItem に渡す参照として保持するだけなので、let で十分。
-    let dragPos: DragPositionState
+    // selectedItem の参照のみ必要（DraggableTierItem への受け渡しは不要になった）
     let dragSel: DragInteractionState
-    let dragHover: DragHoverState
-    let rowFrames: [UUID: CGRect]
-    let trayFrame: CGRect
 
     @State private var dragOffset: CGFloat = 0
     @State private var showClearAlert = false
@@ -95,21 +90,16 @@ struct ItemPoolView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHGrid(rows: rows, spacing: spacing) {
                         ForEach(vm.pool) { item in
-                            DraggableTierItem(
-                                item: item,
-                                vm: vm,
-                                rowFrames: rowFrames,
-                                onTap: {
-                                    withAnimation(.spring()) {
+                            TierItemView(item: item)
+                                .contentShape(Rectangle())
+                                .simultaneousGesture(
+                                    TapGesture().onEnded {
                                         dragSel.selectedItem = item
-                                        showPool = false
+                                        withAnimation(.easeOut(duration: 0.15)) {
+                                            showPool = false
+                                        }
                                     }
-                                },
-                                dragPos: dragPos,
-                                dragHover: dragHover,
-                                dragSel: dragSel,
-                                trayFrame: trayFrame
-                            )
+                                )
                         }
                     }
                     .padding(8)

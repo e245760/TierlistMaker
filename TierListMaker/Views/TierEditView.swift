@@ -28,6 +28,7 @@ private struct TierRowListView: View {
     let rowDragState: RowDragState
     let rowFrames: [UUID: CGRect]
     let trayFrame: CGRect
+    let showPool: Bool
     let onRowFramesChanged: ([UUID: CGRect]) -> Void
 
     var body: some View {
@@ -60,7 +61,11 @@ private struct TierRowListView: View {
             }
             .environment(\.colorScheme, vm.tierTheme.colorScheme)
             .onPreferenceChange(RowFramePreferenceKey.self, perform: onRowFramesChanged)
-            .frame(height: scrollGeo.size.height - 100)
+            // アイテム選択中はパネルが閉じていなくてもフルハイトに戻し、
+            // 全行をタップ可能にする
+            .frame(height: (showPool && dragSel.selectedItem == nil)
+                   ? scrollGeo.size.height - 100
+                   : scrollGeo.size.height)
             .mask(
                 VStack(spacing: 0) {
                     Rectangle()
@@ -73,77 +78,6 @@ private struct TierRowListView: View {
                 }
             )
         }
-    }
-}
-
-// MARK: - ItemPoolOverlay
-//
-// プールパネル（ItemPoolView）とその背景ディムを画面下部に重ねる ViewModifier。
-// showPool が true のとき:
-//   - 全面に半透明ディムを表示し、タップで閉じる
-//   - 画面下端から ItemPoolView をスライドイン
-//
-// dragPos / dragSel は参照型なので let で渡しても ItemPoolView 内で正しく動作する。
-
-private struct ItemPoolOverlay: ViewModifier {
-    let vm: TierListViewModel
-    @Binding var showPool: Bool
-    let dragPos: DragPositionState
-    let dragSel: DragInteractionState
-    let dragHover: DragHoverState
-    let rowFrames: [UUID: CGRect]
-    let trayFrame: CGRect
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                if showPool {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation(.easeOut(duration: 0.22)) { showPool = false }
-                        }
-                }
-            }
-            .overlay(alignment: .bottom) {
-                if showPool {
-                    ItemPoolView(
-                        vm: vm,
-                        showPool: $showPool,
-                        dragPos: dragPos,
-                        dragSel: dragSel,
-                        dragHover: dragHover,
-                        rowFrames: rowFrames,
-                        trayFrame: trayFrame
-                    )
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .bottom),
-                        removal: .offset(y: 500)
-                    ))
-                }
-            }
-    }
-}
-
-private extension View {
-    func itemPoolOverlay(
-        vm: TierListViewModel,
-        showPool: Binding<Bool>,
-        dragPos: DragPositionState,
-        dragSel: DragInteractionState,
-        dragHover: DragHoverState,
-        rowFrames: [UUID: CGRect],
-        trayFrame: CGRect
-    ) -> some View {
-        modifier(ItemPoolOverlay(
-            vm: vm,
-            showPool: showPool,
-            dragPos: dragPos,
-            dragSel: dragSel,
-            dragHover: dragHover,
-            rowFrames: rowFrames,
-            trayFrame: trayFrame
-        ))
     }
 }
 
@@ -287,6 +221,7 @@ struct TierEditView: View {
                         rowDragState: rowDragState,
                         rowFrames: rowFrames,
                         trayFrame: trayFrame,
+                        showPool: showPool,
                         onRowFramesChanged: { rowFrames = $0 }
                     )
                     .zIndex(0)
@@ -373,6 +308,33 @@ struct TierEditView: View {
                     )
                     .environment(\.tierTheme, vm.tierTheme)
                     .zIndex(98)
+
+                    // ── プールパネル背景ディム ──
+
+                    if showPool && dragSel.selectedItem == nil {
+                        Color.black.opacity(0.3)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.easeOut(duration: 0.22)) { showPool = false }
+                            }
+                            .zIndex(200)
+                    }
+
+                    // ── プールパネル ──
+
+                    if showPool {
+                        ItemPoolView(
+                            vm: vm,
+                            showPool: $showPool,
+                            dragSel: dragSel
+                        )
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .bottom),
+                            removal: .opacity
+                        ))
+                        .allowsHitTesting(dragSel.selectedItem == nil)
+                        .zIndex(201)
+                    }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -419,15 +381,6 @@ struct TierEditView: View {
                 TierExportSheet(vm: vm, title: normalizedTitle)
             }
         }
-        .itemPoolOverlay(
-            vm: vm,
-            showPool: $showPool,
-            dragPos: dragPos,
-            dragSel: dragSel,
-            dragHover: dragHover,
-            rowFrames: rowFrames,
-            trayFrame: trayFrame
-        )
     }
 
     // MARK: - Actions

@@ -36,15 +36,25 @@ struct LibraryView: View {
                                     .equatable()
                                     .onTapGesture { onOpen(saveData) }
                                     .overlay(alignment: .topTrailing) {
-                                        Button {
-                                            deletingId = saveData.id
-                                            showDeleteAlert = true
+                                        Menu {
+                                            Button {
+                                                store.duplicate(id: saveData.id)
+                                            } label: {
+                                                Label("複製", systemImage: "doc.on.doc")
+                                            }
+
+                                            Button(role: .destructive) {
+                                                deletingId = saveData.id
+                                                showDeleteAlert = true
+                                            } label: {
+                                                Label("削除", systemImage: "trash")
+                                            }
                                         } label: {
-                                            Image(systemName: "trash.fill")
+                                            Image(systemName: "ellipsis")
                                                 .font(.caption.bold())
                                                 .foregroundColor(.white)
                                                 .padding(6)
-                                                .background(Color.red.opacity(0.85))
+                                                .background(Color.black.opacity(0.45))
                                                 .clipShape(Circle())
                                                 .padding(6)
                                         }

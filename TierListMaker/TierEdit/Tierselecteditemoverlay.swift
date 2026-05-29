@@ -15,10 +15,12 @@ struct TierSelectedItemOverlay: View {
     var body: some View {
         HStack {
             Spacer()
+                .allowsHitTesting(false)
             VStack(spacing: 6) {
                 Text("配置先のティアをタップ")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .allowsHitTesting(false)
 
                 Button(action: onEdit) {
                     ZStack(alignment: .topTrailing) {
@@ -36,8 +38,10 @@ struct TierSelectedItemOverlay: View {
                 Text("タップして編集")
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                    .allowsHitTesting(false)
             }
             Spacer()
+                .allowsHitTesting(false)
         }
         .padding(.bottom, 36)
         .transition(.opacity.combined(with: .scale))
