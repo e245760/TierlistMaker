@@ -210,9 +210,6 @@ struct ImageItemEditSheet: View {
     @State private var editedCropOffsetX: CGFloat
     @State private var editedCropOffsetY: CGFloat
     @State private var editedCropScale: CGFloat
-    // はみ出し制御
-    @State private var editedCropContain: Bool
-    @State private var editedCropTransparentBg: Bool
     // テキスト帯
     @State private var editedLabel: String
     @State private var editedTextColor: Color
@@ -220,23 +217,19 @@ struct ImageItemEditSheet: View {
 
     private let maxLength = 12
 
-    // FileManager から読み込んだ画像をキャッシュ
-    // （シート表示中に何度も load() を呼ばないようにする）
     private let cachedImage: UIImage?
 
     init(item: Binding<TierItem>, dismissSheet: (() -> Void)? = nil) {
         self._item = item
         self.dismissSheet = dismissSheet
-        self._editedFlipH             = State(initialValue: item.wrappedValue.isFlippedHorizontal)
-        self._editedFlipV             = State(initialValue: item.wrappedValue.isFlippedVertical)
-        self._editedCropOffsetX       = State(initialValue: item.wrappedValue.cropOffsetX)
-        self._editedCropOffsetY       = State(initialValue: item.wrappedValue.cropOffsetY)
-        self._editedCropScale         = State(initialValue: item.wrappedValue.cropScale)
-        self._editedCropContain       = State(initialValue: item.wrappedValue.cropContain)
-        self._editedCropTransparentBg = State(initialValue: item.wrappedValue.cropTransparentBg)
-        self._editedLabel             = State(initialValue: item.wrappedValue.label)
-        self._editedTextColor         = State(initialValue: Color(hex: item.wrappedValue.textColorHex))
-        self._editedBgColor           = State(initialValue: Color(hex: item.wrappedValue.backgroundColorHex))
+        self._editedFlipH         = State(initialValue: item.wrappedValue.isFlippedHorizontal)
+        self._editedFlipV         = State(initialValue: item.wrappedValue.isFlippedVertical)
+        self._editedCropOffsetX   = State(initialValue: item.wrappedValue.cropOffsetX)
+        self._editedCropOffsetY   = State(initialValue: item.wrappedValue.cropOffsetY)
+        self._editedCropScale     = State(initialValue: item.wrappedValue.cropScale)
+        self._editedLabel         = State(initialValue: item.wrappedValue.label)
+        self._editedTextColor     = State(initialValue: Color(hex: item.wrappedValue.textColorHex))
+        self._editedBgColor       = State(initialValue: Color(hex: item.wrappedValue.backgroundColorHex))
 
         if let name = item.wrappedValue.imageFileName {
             cachedImage = ImageFileStore.shared.load(fileName: name)
@@ -258,9 +251,7 @@ struct ImageItemEditSheet: View {
             isFlippedVertical: editedFlipV,
             cropOffsetX: editedCropOffsetX,
             cropOffsetY: editedCropOffsetY,
-            cropScale: editedCropScale,
-            cropContain: editedCropContain,
-            cropTransparentBg: editedCropTransparentBg
+            cropScale: editedCropScale
         )
     }
 
@@ -274,13 +265,7 @@ struct ImageItemEditSheet: View {
 
                 // ── プレビュー ──
                 ZStack {
-                    // 透明設定時はチェッカーを背景に
-                    if !editedCropContain && editedCropTransparentBg {
-                        CheckerboardView()
-                            .ignoresSafeArea(edges: .top)
-                    } else {
-                        Color(.systemGray6).ignoresSafeArea(edges: .top)
-                    }
+                    Color(.systemGray6).ignoresSafeArea(edges: .top)
                     VStack(spacing: 8) {
                         Text("プレビュー")
                             .font(.caption)
@@ -291,8 +276,7 @@ struct ImageItemEditSheet: View {
                             .animation(.spring(), value: editedCropOffsetX)
                             .animation(.spring(), value: editedCropOffsetY)
                             .animation(.spring(), value: editedCropScale)
-                            .animation(.spring(), value: editedCropContain)
-                            .animation(.spring(), value: editedCropTransparentBg)
+                            .animation(.spring(), value: editedLabel)
                     }
                     .padding(.vertical, 16)
                 }
@@ -338,8 +322,6 @@ struct ImageItemEditSheet: View {
                                 offsetX: $editedCropOffsetX,
                                 offsetY: $editedCropOffsetY,
                                 scale: $editedCropScale,
-                                cropContain: $editedCropContain,
-                                cropTransparentBg: $editedCropTransparentBg,
                                 cachedImage: cachedImage,
                                 itemSize: item.itemSize,
                                 dismissSheet: {
@@ -348,8 +330,6 @@ struct ImageItemEditSheet: View {
                                     item.cropOffsetX         = editedCropOffsetX
                                     item.cropOffsetY         = editedCropOffsetY
                                     item.cropScale           = editedCropScale
-                                    item.cropContain         = editedCropContain
-                                    item.cropTransparentBg   = editedCropTransparentBg
                                     dismissSheet?()
                                 }
                             )
@@ -357,17 +337,10 @@ struct ImageItemEditSheet: View {
                             HStack {
                                 Label("切り取り範囲を編集", systemImage: "crop.rotate")
                                 Spacer()
-                                HStack(spacing: 6) {
-                                    if !editedCropContain {
-                                        Image(systemName: editedCropTransparentBg ? "circle.dotted" : "square.dashed.inset.filled")
-                                            .font(.caption)
-                                            .foregroundColor(.orange)
-                                    }
-                                    if hasCustomCrop {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.subheadline)
-                                            .foregroundColor(.blue)
-                                    }
+                                if hasCustomCrop {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.subheadline)
+                                        .foregroundColor(.blue)
                                 }
                             }
                         }
@@ -407,8 +380,6 @@ struct ImageItemEditSheet: View {
                         item.cropOffsetX         = editedCropOffsetX
                         item.cropOffsetY         = editedCropOffsetY
                         item.cropScale           = editedCropScale
-                        item.cropContain         = editedCropContain
-                        item.cropTransparentBg   = editedCropTransparentBg
                         if let dismissSheet {
                             dismissSheet()
                         } else {

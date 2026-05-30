@@ -10,16 +10,10 @@ struct ImageCropEditView: View {
     @Binding var offsetX: CGFloat
     @Binding var offsetY: CGFloat
     @Binding var scale: CGFloat
-    @Binding var cropContain: Bool
-    @Binding var cropTransparentBg: Bool
 
-    // imageData の代わりに、呼び出し元で load 済みの UIImage を受け取る。
-    // シート表示中にファイルを何度も読みに行かないための最適化。
     let cachedImage: UIImage?
     let itemSize: ItemSize
 
-    /// 完了タップ時にシート全体を閉じるクロージャ。
-    /// nil の場合は通常の dismiss（NavigationStack を1段ポップ）にフォールバックする。
     var dismissSheet: (() -> Void)? = nil
 
     // MARK: - Environment
@@ -32,8 +26,6 @@ struct ImageCropEditView: View {
     @State private var initialOffsetX: CGFloat = 0
     @State private var initialOffsetY: CGFloat = 0
     @State private var initialScale: CGFloat = 1.0
-    @State private var initialCropContain: Bool = true
-    @State private var initialCropTransparentBg: Bool = false
 
     // MARK: - Gesture State
 
@@ -56,11 +48,10 @@ struct ImageCropEditView: View {
 
     // MARK: - Computed
 
-    private var scaleMin: CGFloat { cropContain ? 1.0 : 0.5 }
+    private let scaleMin: CGFloat = 1.0
     private var hasCustomCrop: Bool { offsetX != 0 || offsetY != 0 || scale != 1.0 }
 
     private func maxAllowedOffset(scale s: CGFloat) -> (x: CGFloat, y: CGFloat) {
-        guard cropContain else { return (1.0, 1.0) }
         let fW = itemSize.width, fH = itemSize.height
         let frameAspect = fW / fH
         let (fillW, fillH): (CGFloat, CGFloat) = imageAspect > frameAspect
@@ -84,8 +75,6 @@ struct ImageCropEditView: View {
         )
     }
 
-    /// アイテムのアスペクト比を保ちながら、利用可能な幅に収まる最大サイズを返す。
-    /// 最大高さ 350pt で頭打ち。
     private func cropFrameSize(availableWidth w: CGFloat) -> CGSize {
         let maxH: CGFloat = 350
         let aspect = itemSize.width / itemSize.height
@@ -102,11 +91,9 @@ struct ImageCropEditView: View {
     }
 
     private func cancelEditing() {
-        offsetX           = initialOffsetX
-        offsetY           = initialOffsetY
-        scale             = initialScale
-        cropContain       = initialCropContain
-        cropTransparentBg = initialCropTransparentBg
+        offsetX = initialOffsetX
+        offsetY = initialOffsetY
+        scale   = initialScale
         dismiss()
     }
 
@@ -141,13 +128,8 @@ struct ImageCropEditView: View {
 
                 VStack(spacing: 0) {
                     Spacer(minLength: 12)
-
-                    // ── クロップキャンバス ──
                     cropCanvas(fW: fW, fH: fH, ls: ls, lo: lo)
-
                     Spacer(minLength: 12)
-
-                    // ── 下部コントロール ──
                     bottomControls(fW: fW, fH: fH)
                 }
             }
@@ -165,13 +147,9 @@ struct ImageCropEditView: View {
             }
         }
         .onAppear {
-            // キャンセル用スナップショットを保存
-            initialOffsetX           = offsetX
-            initialOffsetY           = offsetY
-            initialScale             = scale
-            initialCropContain       = cropContain
-            initialCropTransparentBg = cropTransparentBg
-            // cachedImage からアスペクト比を計算（ファイルを読み直さない）
+            initialOffsetX = offsetX
+            initialOffsetY = offsetY
+            initialScale   = scale
             if let img = cachedImage, img.size.height > 0 {
                 imageAspect = img.size.width / img.size.height
             }
@@ -186,14 +164,8 @@ struct ImageCropEditView: View {
         ls: CGFloat, lo: (x: CGFloat, y: CGFloat)
     ) -> some View {
         ZStack {
-            // 背景
-            if !cropContain && cropTransparentBg {
-                CheckerboardView()
-            } else {
-                Color(hex: "#AAAAAA")
-            }
+            Color(hex: "#AAAAAA")
 
-            // 画像（cachedImage を直接使う）
             if let uiImage = cachedImage {
                 Image(uiImage: uiImage)
                     .resizable()
@@ -202,17 +174,14 @@ struct ImageCropEditView: View {
                     .offset(x: lo.x * fW, y: lo.y * fH)
             }
 
-            // グリッドオーバーレイ（操作中のみ）
             CropGridOverlay(lineColor: gridColor)
                 .opacity(isGesturing ? 1 : 0)
                 .animation(.easeInOut(duration: 0.15), value: isGesturing)
         }
         .frame(width: fW, height: fH)
         .clipped()
-        // フレーム境界線・コーナーマークはclipの外に描画
         .overlay { Rectangle().strokeBorder(primaryColor.opacity(0.3), lineWidth: 0.5) }
         .overlay { CropCornerMarks(color: primaryColor) }
-        // 拡大率バッジ（操作中のみ）
         .overlay(alignment: .topTrailing) {
             Text(String(format: "×%.2f", ls))
                 .font(.caption2.monospacedDigit().bold())
@@ -244,13 +213,11 @@ struct ImageCropEditView: View {
     @ViewBuilder
     private func bottomControls(fW: CGFloat, fH: CGFloat) -> some View {
         VStack(spacing: 0) {
-            // ヒント
             Text("ピンチで拡大・ドラッグで移動")
                 .font(.caption)
                 .foregroundColor(secondaryColor)
                 .padding(.vertical, 12)
 
-            // 拡大スライダー
             HStack(spacing: 14) {
                 Image(systemName: "minus.magnifyingglass")
                     .foregroundColor(secondaryColor).font(.callout)
@@ -265,9 +232,8 @@ struct ImageCropEditView: View {
                             offsetY = offsetY.clamped(to: -maxY...maxY)
                         }
                     ),
-                    in: scaleMin < 5.0 ? scaleMin...5.0 : 0.0...1.0
+                    in: scaleMin...5.0
                 )
-                .disabled(scaleMin >= 5.0)
 
                 Image(systemName: "plus.magnifyingglass")
                     .foregroundColor(secondaryColor).font(.callout)
@@ -277,44 +243,16 @@ struct ImageCropEditView: View {
 
             separatorColor.frame(height: 0.5)
 
-            // アクションボタン行
             HStack(spacing: 0) {
-                // リセット
                 cropControlButton(
                     icon: "arrow.counterclockwise",
                     label: "リセット",
                     tint: hasCustomCrop ? primaryColor : disabledColor
                 ) { resetAll() }
                 .disabled(!hasCustomCrop)
-
-                controlSep
-
-                // はみ出し制御トグル
-                cropControlButton(
-                    icon: cropContain ? "square.dashed" : "square.dashed.inset.filled",
-                    label: cropContain ? "制限あり" : "制限なし",
-                    tint: cropContain ? Color(hex: "#D4A017") : primaryColor
-                ) {
-                    withAnimation(.spring()) { cropContain.toggle(); resetAll() }
-                }
-
-                // 透明背景トグル（はみ出し制御 OFF 時のみ）
-                if !cropContain {
-                    controlSep.transition(.opacity)
-
-                    cropControlButton(
-                        icon: "circle.dotted",
-                        label: "透明背景",
-                        tint: cropTransparentBg ? Color.orange : primaryColor
-                    ) {
-                        withAnimation(.spring()) { cropTransparentBg.toggle() }
-                    }
-                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
-                }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 16)
-            .animation(.spring(), value: cropContain)
         }
         .background(controlBg)
     }
@@ -376,19 +314,15 @@ struct CropCornerMarks: View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
             Path { path in
-                // 左上
                 path.move(to: CGPoint(x: 0, y: len))
                 path.addLine(to: CGPoint(x: 0, y: 0))
                 path.addLine(to: CGPoint(x: len, y: 0))
-                // 右上
                 path.move(to: CGPoint(x: w - len, y: 0))
                 path.addLine(to: CGPoint(x: w, y: 0))
                 path.addLine(to: CGPoint(x: w, y: len))
-                // 右下
                 path.move(to: CGPoint(x: w, y: h - len))
                 path.addLine(to: CGPoint(x: w, y: h))
                 path.addLine(to: CGPoint(x: w - len, y: h))
-                // 左下
                 path.move(to: CGPoint(x: len, y: h))
                 path.addLine(to: CGPoint(x: 0, y: h))
                 path.addLine(to: CGPoint(x: 0, y: h - len))
@@ -396,32 +330,5 @@ struct CropCornerMarks: View {
             .stroke(color, lineWidth: thickness)
         }
         .allowsHitTesting(false)
-    }
-}
-
-// MARK: - チェッカーボード（透明背景の視覚的表示）
-
-struct CheckerboardView: View {
-    private let tileSize: CGFloat = 8
-
-    var body: some View {
-        Canvas { ctx, size in
-            let cols = Int(ceil(size.width  / tileSize))
-            let rows = Int(ceil(size.height / tileSize))
-            for row in 0..<rows {
-                for col in 0..<cols {
-                    let isLight = (row + col) % 2 == 0
-                    ctx.fill(
-                        Path(CGRect(
-                            x: CGFloat(col) * tileSize,
-                            y: CGFloat(row) * tileSize,
-                            width: tileSize,
-                            height: tileSize
-                        )),
-                        with: .color(isLight ? Color(.systemGray5) : Color(.systemGray3))
-                    )
-                }
-            }
-        }
     }
 }

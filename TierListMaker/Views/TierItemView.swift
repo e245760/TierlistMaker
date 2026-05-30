@@ -138,21 +138,19 @@ struct TierItemView: View {
     // MARK: - 以下は変更なし
 
     private var backgroundColor: Color {
-        if !item.cropContain && item.cropTransparentBg { return .clear }
+        // cropContain を常に true として扱うため透明背景は使わない
         return Color(hex: item.backgroundColorHex)
     }
 
     private func resolvedCrop(for uiImage: UIImage) -> (CGFloat, CGFloat, CGFloat) {
-        if item.cropContain {
-            let clampedScale = max(1.0, item.cropScale)
-            let (maxX, maxY) = maxAllowedOffset(for: uiImage, scale: clampedScale)
-            return (
-                item.cropOffsetX.clamped(to: -maxX...maxX),
-                item.cropOffsetY.clamped(to: -maxY...maxY),
-                clampedScale
-            )
-        }
-        return (item.cropOffsetX, item.cropOffsetY, item.cropScale)
+        // cropContain を常に true として扱う（制限なしモードは廃止）
+        let clampedScale = max(1.0, item.cropScale)
+        let (maxX, maxY) = maxAllowedOffset(for: uiImage, scale: clampedScale)
+        return (
+            item.cropOffsetX.clamped(to: -maxX...maxX),
+            item.cropOffsetY.clamped(to: -maxY...maxY),
+            clampedScale
+        )
     }
 
     func maxAllowedOffset(for uiImage: UIImage, scale: CGFloat) -> (x: CGFloat, y: CGFloat) {
