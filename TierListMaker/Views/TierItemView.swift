@@ -55,30 +55,45 @@ struct TierItemView: View {
 
     @ViewBuilder
     private var imageContent: some View {
-        // syncImageLoading: bodyで直接load()（スナップショット用）
-        // 通常:             @StateのloadedImageを参照（非同期ロード結果）
         let uiImage: UIImage? = syncImageLoading
             ? item.imageFileName.flatMap { ImageFileStore.shared.load(fileName: $0) }
             : loadedImage
 
-        if let uiImage {
-            let (ox, oy, sc) = resolvedCrop(for: uiImage)
-            Image(uiImage: uiImage)
-                .resizable()
-                .scaledToFill()
-                .scaleEffect(sc)
-                .offset(
-                    x: ox * item.itemSize.width,
-                    y: oy * item.itemSize.height
-                )
-                .scaleEffect(
-                    x: item.isFlippedHorizontal ? -1 : 1,
-                    y: item.isFlippedVertical   ? -1 : 1
-                )
-        } else {
-            // ロード中プレースホルダー（背景色で埋める）
-            Color(hex: item.backgroundColorHex)
+        ZStack(alignment: .bottom) {
+            if let uiImage {
+                let (ox, oy, sc) = resolvedCrop(for: uiImage)
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .scaleEffect(sc)
+                    .offset(
+                        x: ox * item.itemSize.width,
+                        y: oy * item.itemSize.height
+                    )
+                    .scaleEffect(
+                        x: item.isFlippedHorizontal ? -1 : 1,
+                        y: item.isFlippedVertical   ? -1 : 1
+                    )
+            } else {
+                Color(hex: item.backgroundColorHex)
+            }
+
+            // ラベルが空でなければ下部に帯状テキストを表示
+            if !item.label.isEmpty {
+                Text(item.label)
+                    .font(tierTheme.fontStyle.font(size: item.textSize.fontSize * 0.7))
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .foregroundColor(Color(hex: item.textColorHex))
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 2)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        Color(hex: item.backgroundColorHex).opacity(0.75)
+                    )
+            }
         }
+        .frame(width: item.itemSize.width, height: item.itemSize.height, alignment: .bottom)
     }
 
     // MARK: - テキスト表示（変更なし）

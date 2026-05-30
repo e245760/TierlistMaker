@@ -77,6 +77,15 @@ class TierListStore: ObservableObject {
         removeFileAndUpdateIndex(id: id)
     }
 
+    func rename(id: UUID, title: String) {
+        guard let idx = savedLists.firstIndex(where: { $0.id == id }) else { return }
+        var updated         = savedLists[idx]
+        updated.title       = title
+        updated.updatedAt   = Date()
+        savedLists[idx]     = updated
+        persistDataAndIndex(updated)
+    }
+
     /// 指定した表を複製して先頭に追加する。
     /// 画像アイテムはファイルごとコピーして、複製元と独立したファイルを持つ。
     /// 複製元を削除しても複製先の画像は残り、逆も同様。

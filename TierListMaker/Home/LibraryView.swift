@@ -1,12 +1,53 @@
 import SwiftUI
 
+// MARK: - SortOrder
+
+enum LibrarySortOrder: String, CaseIterable {
+    case updatedDesc = "updatedDesc"   // 更新日時（新しい順）← デフォルト
+    case updatedAsc  = "updatedAsc"    // 更新日時（古い順）
+    case titleAsc    = "titleAsc"      // タイトル（あいうえお順）
+    case createdDesc = "createdDesc"   // 作成日時（新しい順）
+
+    var label: String {
+        switch self {
+        case .updatedDesc: return "更新日時（新しい順）"
+        case .updatedAsc:  return "更新日時（古い順）"
+        case .titleAsc:    return "タイトル順"
+        case .createdDesc: return "作成日時（新しい順）"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .updatedDesc: return "arrow.down.circle"
+        case .updatedAsc:  return "arrow.up.circle"
+        case .titleAsc:    return "textformat.abc"
+        case .createdDesc: return "calendar.badge.clock"
+        }
+    }
+
+    func sorted(_ lists: [TierListSaveData]) -> [TierListSaveData] {
+        switch self {
+        case .updatedDesc: return lists.sorted { $0.updatedAt > $1.updatedAt }
+        case .updatedAsc:  return lists.sorted { $0.updatedAt < $1.updatedAt }
+        case .titleAsc:    return lists.sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
+        case .createdDesc: return lists.sorted { $0.createdAt > $1.createdAt }
+        }
+    }
+}
+
 struct LibraryView: View {
     @ObservedObject var store: TierListStore
-    @EnvironmentObject private var pm: PurchaseManager // ← 引数から変更
+    @EnvironmentObject private var pm: PurchaseManager
     let onOpen: (TierListSaveData?) -> Void
 
     @State private var deletingId: UUID? = nil
     @State private var showDeleteAlert = false
+    @State private var renamingId: UUID? = nil
+    @State private var renameText: String = ""
+    @State private var showRenameAlert = false
+    @State private var showSortDialog = false
+    @AppStorage("librarySortOrder") private var sortOrder: LibrarySortOrder = .updatedDesc
 
     private let columns = [
         GridItem(.flexible(), spacing: 16),
@@ -16,6 +57,11 @@ struct LibraryView: View {
     // 上限に達しているか
     private var isAtLimit: Bool {
         !pm.canCreate(currentCount: store.savedLists.count)
+    }
+
+    // ソート済みリスト
+    private var sortedLists: [TierListSaveData] {
+        sortOrder.sorted(store.savedLists)
     }
 
     var body: some View {
@@ -31,35 +77,21 @@ struct LibraryView: View {
                             .padding(.top, 8)
 
                         LazyVGrid(columns: columns, spacing: 16) {
-                            ForEach(store.savedLists) { saveData in
-                                TierListCard(saveData: saveData)
-                                    .equatable()
-                                    .onTapGesture { onOpen(saveData) }
-                                    .overlay(alignment: .topTrailing) {
-                                        Menu {
-                                            Button {
-                                                store.duplicate(id: saveData.id)
-                                            } label: {
-                                                Label("複製", systemImage: "doc.on.doc")
-                                            }
-
-                                            Button(role: .destructive) {
-                                                deletingId = saveData.id
-                                                showDeleteAlert = true
-                                            } label: {
-                                                Label("削除", systemImage: "trash")
-                                            }
-                                        } label: {
-                                            Image(systemName: "ellipsis")
-                                                .font(.caption.bold())
-                                                .foregroundColor(.white)
-                                                .padding(6)
-                                                .background(Color.black.opacity(0.45))
-                                                .clipShape(Circle())
-                                                .padding(6)
-                                        }
-                                        .buttonStyle(.plain)
+                            ForEach(sortedLists) { saveData in
+                                LibraryCardCell(
+                                    saveData: saveData,
+                                    onOpen: { onOpen(saveData) },
+                                    onRename: {
+                                        renamingId      = saveData.id
+                                        renameText      = saveData.title
+                                        showRenameAlert = true
+                                    },
+                                    onDuplicate: { store.duplicate(id: saveData.id) },
+                                    onDelete: {
+                                        deletingId      = saveData.id
+                                        showDeleteAlert = true
                                     }
+                                )
                             }
                         }
                         .padding(16)
@@ -69,11 +101,21 @@ struct LibraryView: View {
             }
             .navigationTitle("ライブラリ")
             .toolbar {
+                // ── ソートボタン ──
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showSortDialog = true
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.body)
+                    }
+                }
+
+                // ── 新規作成ボタン ──
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         onOpen(nil)
                     } label: {
-                        // 上限時は鍵アイコンに切り替え
                         Image(systemName: isAtLimit ? "lock.fill" : "plus")
                             .font(.body.bold())
                             .foregroundColor(isAtLimit ? .orange : .blue)
@@ -87,6 +129,27 @@ struct LibraryView: View {
                 Button("キャンセル", role: .cancel) {}
             } message: {
                 Text("この操作は取り消せません。")
+            }
+            .confirmationDialog("並び替え", isPresented: $showSortDialog, titleVisibility: .visible) {
+                ForEach(LibrarySortOrder.allCases, id: \.self) { order in
+                    Button {
+                        withAnimation(.spring()) { sortOrder = order }
+                    } label: {
+                        Text(order.label + (sortOrder == order ? " ✓" : ""))
+                    }
+                }
+                Button("キャンセル", role: .cancel) {}
+            }
+            .alert("名前を変更", isPresented: $showRenameAlert) {
+                TextField("ティア表の名前", text: $renameText)
+                    .autocorrectionDisabled(true)
+                Button("変更") {
+                    let trimmed = renameText.trimmingCharacters(in: .whitespaces)
+                    if let id = renamingId, !trimmed.isEmpty {
+                        store.rename(id: id, title: trimmed)
+                    }
+                }
+                Button("キャンセル", role: .cancel) {}
             }
         }
     }
@@ -171,6 +234,50 @@ struct LibraryView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - LibraryCardCell
+//
+// TierListCard とメニューを1つのビューにまとめた セル。
+// ForEach のクロージャから切り出すことで、メニュー操作時の
+// LazyVGrid 全体の再評価を防ぐ。
+// saveData が変わらない限り TierListCard の再描画をスキップする。
+
+private struct LibraryCardCell: View {
+    let saveData: TierListSaveData
+    let onOpen: () -> Void
+    let onRename: () -> Void
+    let onDuplicate: () -> Void
+    let onDelete: () -> Void
+
+    @State private var showActions = false
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            TierListCard(saveData: saveData)
+                .equatable()
+                .onTapGesture { onOpen() }
+
+            Button {
+                showActions = true
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.caption.bold())
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 28)
+                    .background(Color.black.opacity(0.45))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .padding(6)
+        }
+        .confirmationDialog(saveData.title, isPresented: $showActions, titleVisibility: .visible) {
+            Button("名前を変更") { onRename() }
+            Button("複製") { onDuplicate() }
+            Button("削除", role: .destructive) { onDelete() }
+            Button("キャンセル", role: .cancel) {}
+        }
     }
 }
 

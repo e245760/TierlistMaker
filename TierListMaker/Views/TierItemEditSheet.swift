@@ -213,6 +213,12 @@ struct ImageItemEditSheet: View {
     // はみ出し制御
     @State private var editedCropContain: Bool
     @State private var editedCropTransparentBg: Bool
+    // テキスト帯
+    @State private var editedLabel: String
+    @State private var editedTextColor: Color
+    @State private var editedBgColor: Color
+
+    private let maxLength = 12
 
     // FileManager から読み込んだ画像をキャッシュ
     // （シート表示中に何度も load() を呼ばないようにする）
@@ -228,6 +234,9 @@ struct ImageItemEditSheet: View {
         self._editedCropScale         = State(initialValue: item.wrappedValue.cropScale)
         self._editedCropContain       = State(initialValue: item.wrappedValue.cropContain)
         self._editedCropTransparentBg = State(initialValue: item.wrappedValue.cropTransparentBg)
+        self._editedLabel             = State(initialValue: item.wrappedValue.label)
+        self._editedTextColor         = State(initialValue: Color(hex: item.wrappedValue.textColorHex))
+        self._editedBgColor           = State(initialValue: Color(hex: item.wrappedValue.backgroundColorHex))
 
         if let name = item.wrappedValue.imageFileName {
             cachedImage = ImageFileStore.shared.load(fileName: name)
@@ -239,9 +248,12 @@ struct ImageItemEditSheet: View {
     var previewItem: TierItem {
         TierItem(
             id: item.id,
-            label: item.label,
+            label: editedLabel,
             imageFileName: item.imageFileName,
             itemSize: item.itemSize,
+            textSize: item.textSize,
+            textColorHex: editedTextColor.toHex(),
+            backgroundColorHex: editedBgColor.toHex(),
             isFlippedHorizontal: editedFlipH,
             isFlippedVertical: editedFlipV,
             cropOffsetX: editedCropOffsetX,
@@ -287,6 +299,37 @@ struct ImageItemEditSheet: View {
                 .frame(height: 130)
 
                 Form {
+
+                    // ── テキスト帯 ──
+                    Section("テキスト帯（最大\(maxLength)文字）") {
+                        TextField("画像に重ねるテキスト（省略可）", text: $editedLabel)
+                            .autocorrectionDisabled(true)
+                            .onChange(of: editedLabel) { _, newValue in
+                                if newValue.count > maxLength {
+                                    editedLabel = String(newValue.prefix(maxLength))
+                                }
+                            }
+                    }
+
+                    // ── テキスト・帯の色（テキストがある場合のみ） ──
+                    if !editedLabel.isEmpty {
+                        Section("テキストカラー") {
+                            colorGrid(colors: [
+                                Color(hex: "#FFFFFF"), Color(hex: "#000000"),
+                                Color(hex: "#FF3B30"), Color(hex: "#FF9500"),
+                                Color(hex: "#FFCC00"), Color(hex: "#34C759"),
+                                Color(hex: "#007AFF"), Color(hex: "#AF52DE"),
+                            ], selected: $editedTextColor)
+                        }
+                        Section("帯の背景色") {
+                            colorGrid(colors: [
+                                Color(hex: "#000000"), Color(hex: "#FFFFFF"),
+                                Color(hex: "#FF7F7F"), Color(hex: "#FFBF7F"),
+                                Color(hex: "#FFFF7F"), Color(hex: "#7FFF7F"),
+                                Color(hex: "#7FBFFF"), Color(hex: "#BF7FFF"),
+                            ], selected: $editedBgColor)
+                        }
+                    }
 
                     // ── 切り取り・拡大縮小 ──
                     Section("切り取り・拡大縮小") {
@@ -356,17 +399,16 @@ struct ImageItemEditSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") {
-                        item.isFlippedHorizontal  = editedFlipH
-                        item.isFlippedVertical    = editedFlipV
-                        item.cropOffsetX          = editedCropOffsetX
-                        item.cropOffsetY          = editedCropOffsetY
-                        item.cropScale            = editedCropScale
-                        item.cropContain          = editedCropContain
-                        item.cropTransparentBg    = editedCropTransparentBg
-                        // dismiss() だと内部の NavigationStack がインターセプトして
-                        // showItemEdit が true のまま残り onDismiss が発火しない。
-                        // dismissSheet 経由で TierItemEditSheet の dismiss() を呼び、
-                        // シートを確実に閉じて onDismiss（selectedItem 更新）を発火させる。
+                        item.label               = editedLabel
+                        item.textColorHex        = editedTextColor.toHex()
+                        item.backgroundColorHex  = editedBgColor.toHex()
+                        item.isFlippedHorizontal = editedFlipH
+                        item.isFlippedVertical   = editedFlipV
+                        item.cropOffsetX         = editedCropOffsetX
+                        item.cropOffsetY         = editedCropOffsetY
+                        item.cropScale           = editedCropScale
+                        item.cropContain         = editedCropContain
+                        item.cropTransparentBg   = editedCropTransparentBg
                         if let dismissSheet {
                             dismissSheet()
                         } else {
@@ -400,5 +442,32 @@ struct ImageItemEditSheet: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func colorGrid(colors: [Color], selected: Binding<Color>) -> some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible()), count: 4),
+            spacing: 12
+        ) {
+            ForEach(0..<colors.count, id: \.self) { i in
+                let color = colors[i]
+                let isSelected = selected.wrappedValue.toHex() == color.toHex()
+                Circle()
+                    .fill(color)
+                    .frame(width: 44, height: 44)
+                    .overlay(Circle().strokeBorder(Color.primary.opacity(0.3), lineWidth: 1))
+                    .overlay(Circle().strokeBorder(isSelected ? Color.primary : .clear, lineWidth: 3).padding(-3))
+                    .overlay(
+                        Image(systemName: "checkmark")
+                            .font(.caption.bold())
+                            .foregroundColor(color.toHex() == "#FFFFFF" ? .black : .white)
+                            .shadow(radius: 1)
+                            .opacity(isSelected ? 1 : 0)
+                    )
+                    .onTapGesture { withAnimation(.spring()) { selected.wrappedValue = color } }
+            }
+        }
+        .padding(.vertical, 8)
     }
 }

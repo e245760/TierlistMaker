@@ -60,10 +60,20 @@ struct HomeView: View {
             editorSession = EditorSession(
                 id: UUID(),
                 vm: vm,
-                title: "ティア表",
+                title: nextTitle(),
                 createdAt: Date()
             )
         }
+    }
+
+    /// 既存のタイトルと重複しない連番を返す。
+    /// 既存タイトルが数字のものから最大値+1を使う。
+    /// 数字のタイトルがなければ「1」から始める。
+    private func nextTitle() -> String {
+        let existingNumbers = store.savedLists
+            .compactMap { Int($0.title) }
+        let next = (existingNumbers.max() ?? 0) + 1
+        return "\(next)"
     }
 }
 
