@@ -171,7 +171,7 @@ struct ImageCropEditView: View {
                     .resizable()
                     .scaledToFill()
                     .scaleEffect(ls)
-                    .offset(x: lo.x * fW, y: lo.y * fH)
+                    .offset(x: lo.x * itemSize.width, y: lo.y * itemSize.height)
             }
 
             CropGridOverlay(lineColor: gridColor)

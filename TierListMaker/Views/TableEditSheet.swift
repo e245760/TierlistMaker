@@ -82,12 +82,13 @@ struct TableEditSheet: View {
 
                     // ── この表のテーマ ──
                     Section("この表のテーマ") {
+                        let visibleThemes = TierTheme.allCases.filter { !$0.isPro }
                         let columns = Array(
                             repeating: GridItem(.flexible(), spacing: 10),
-                            count: min(TierTheme.allCases.count, 3)
+                            count: min(visibleThemes.count, 3)
                         )
                         LazyVGrid(columns: columns, spacing: 10) {
-                            ForEach(TierTheme.allCases, id: \.self) { theme in
+                            ForEach(visibleThemes, id: \.self) { theme in
                                 themeButton(theme)
                             }
                         }
@@ -114,7 +115,7 @@ struct TableEditSheet: View {
                                     .padding(.vertical, 12)
                                     .background(
                                         RoundedRectangle(cornerRadius: 10)
-                                            .fill(isSelected ? Color.blue : Color(.systemGray5))
+                                            .fill(isSelected ? Color.blue : Color(.systemGray4))
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -144,7 +145,7 @@ struct TableEditSheet: View {
                                     .padding(.vertical, 8)
                                     .background(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .fill(isSelected ? Color.blue : Color(.systemGray5))
+                                            .fill(isSelected ? Color.blue : Color(.systemGray4))
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -173,7 +174,7 @@ struct TableEditSheet: View {
                                     .padding(.vertical, 12)
                                     .background(
                                         RoundedRectangle(cornerRadius: 10)
-                                            .fill(isSelected ? Color.blue : Color(.systemGray5))
+                                            .fill(isSelected ? Color.blue : Color(.systemGray4))
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -203,7 +204,7 @@ struct TableEditSheet: View {
                                     .padding(.vertical, 8)
                                     .background(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .fill(isSelected ? Color.blue : Color(.systemGray5))
+                                            .fill(isSelected ? Color.blue : Color(.systemGray4))
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -306,7 +307,7 @@ struct TableEditSheet: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(isSelected ? Color.blue : Color(.systemGray5))
+                        .fill(isSelected ? Color.blue : Color(.systemGray4))
                 )
 
                 // ── Pro バッジ（ロック中のみ） ──

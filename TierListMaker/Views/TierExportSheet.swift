@@ -82,17 +82,16 @@ struct TierExportSheet: View {
             GeometryReader { geo in
                 ZStack {
                     Color(.systemGroupedBackground).ignoresSafeArea()
-                    if isRendering {
-                        renderingPlaceholder
-                    } else if let image = renderedImage {
+
+                    if let image = renderedImage {
                         previewContent(image: image)
+                    } else if isRendering {
+                        renderingPlaceholder
                     } else {
                         Text("プレビューの生成に失敗しました")
                             .foregroundColor(.secondary)
                     }
                 }
-                // onAppear で containerWidth を確定させる。
-                // これが初回レンダリングのトリガーになる（.task は使わない）。
                 .onAppear { containerWidth = geo.size.width }
                 .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
             }
@@ -181,7 +180,6 @@ struct TierExportSheet: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .disabled(isRendering)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -216,7 +214,7 @@ struct TierExportSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .animation(.spring(), value: savedOK)
                     }
-                    .disabled(isSaving || savedOK || isRendering)
+                    .disabled(isSaving || savedOK)
 
                     // シェアシート
                     Button {
@@ -229,7 +227,7 @@ struct TierExportSheet: View {
                             .foregroundColor(.primary)
                             .clipShape(RoundedRectangle(cornerRadius: 14))
                     }
-                    .disabled(isRendering || renderedImage == nil)
+                    .disabled(renderedImage == nil)
                     .sheet(isPresented: $showShareSheet) {
                         if let image = renderedImage,
                            let pngData = image.pngData() {

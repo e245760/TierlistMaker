@@ -28,7 +28,7 @@ struct AppSettingsView: View {
                                 .padding(.vertical, 12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .fill(isSelected ? Color.blue : Color(.systemGray5))
+                                        .fill(isSelected ? Color.blue : Color(.systemGray4))
                                 )
                             }
                             .buttonStyle(.plain)

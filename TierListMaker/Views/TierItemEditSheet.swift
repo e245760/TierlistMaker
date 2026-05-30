@@ -199,6 +199,7 @@ struct TextItemEditSheet: View {
 struct ImageItemEditSheet: View {
     @Binding var item: TierItem
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject private var pm: PurchaseManager
 
     /// 完了タップ時にシートごと閉じるクロージャ（TierItemEditSheet から受け取る）
     var dismissSheet: (() -> Void)? = nil
@@ -214,6 +215,7 @@ struct ImageItemEditSheet: View {
     @State private var editedLabel: String
     @State private var editedTextColor: Color
     @State private var editedBgColor: Color
+    @State private var showPaywall = false
 
     private let maxLength = 12
 
@@ -304,6 +306,7 @@ struct ImageItemEditSheet: View {
                                 Color(hex: "#FFCC00"), Color(hex: "#34C759"),
                                 Color(hex: "#007AFF"), Color(hex: "#AF52DE"),
                             ], selected: $editedTextColor)
+                            customColorPicker(label: "カスタムカラー", selected: $editedTextColor)
                         }
                         Section("帯の背景色") {
                             colorGrid(colors: [
@@ -312,6 +315,7 @@ struct ImageItemEditSheet: View {
                                 Color(hex: "#FFFF7F"), Color(hex: "#7FFF7F"),
                                 Color(hex: "#7FBFFF"), Color(hex: "#BF7FFF"),
                             ], selected: $editedBgColor)
+                            customColorPicker(label: "カスタムカラー", selected: $editedBgColor)
                         }
                     }
 
@@ -409,7 +413,7 @@ struct ImageItemEditSheet: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isOn.wrappedValue ? Color.blue : Color(.systemGray5))
+                    .fill(isOn.wrappedValue ? Color.blue : Color(.systemGray4))
             )
         }
         .buttonStyle(.plain)
@@ -440,5 +444,43 @@ struct ImageItemEditSheet: View {
             }
         }
         .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private func customColorPicker(label: String, selected: Binding<Color>) -> some View {
+        HStack {
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            Spacer()
+            if pm.isPro {
+                ColorPicker("", selection: selected, supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 44, height: 44)
+                    .scaleEffect(1.3)
+            } else {
+                proLockedBadge
+            }
+        }
+        .padding(.bottom, 4)
+    }
+
+    private var proLockedBadge: some View {
+        Button {
+            showPaywall = true
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "lock.fill")
+                    .font(.caption.bold())
+                Text("Pro")
+                    .font(.caption.bold())
+            }
+            .foregroundColor(.orange)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.orange.opacity(0.12))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }

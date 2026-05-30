@@ -74,6 +74,8 @@ struct TierItemView: View {
                         x: item.isFlippedHorizontal ? -1 : 1,
                         y: item.isFlippedVertical   ? -1 : 1
                     )
+                    .frame(width: item.itemSize.width, height: item.itemSize.height)
+                    .clipped()
             } else {
                 Color(hex: item.backgroundColorHex)
             }
@@ -93,7 +95,7 @@ struct TierItemView: View {
                     )
             }
         }
-        .frame(width: item.itemSize.width, height: item.itemSize.height, alignment: .bottom)
+        .frame(width: item.itemSize.width, height: item.itemSize.height)
     }
 
     // MARK: - テキスト表示（変更なし）

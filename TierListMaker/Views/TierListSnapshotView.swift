@@ -193,23 +193,25 @@ struct TierListSnapshotView: View {
                 .background(Color(hex: row.color))
                 .foregroundColor(Color(hex: row.textColorHex))
 
-            // アイテムグリッド（行の上端から詰めて配置、残りは背景色）
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(chunks.enumerated()), id: \.offset) { _, chunk in
-                    HStack(spacing: 4) {
-                        ForEach(chunk) { item in
-                            TierItemView(item: item)
-                                .frame(
-                                    width:  defaultItemSize.width,
-                                    height: defaultItemSize.height
-                                )
+            // アイテムグリッド（左寄せ・上下中央）
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(chunks.enumerated()), id: \.offset) { _, chunk in
+                        HStack(spacing: 4) {
+                            ForEach(chunk) { item in
+                                TierItemView(item: item)
+                                    .frame(
+                                        width:  defaultItemSize.width,
+                                        height: defaultItemSize.height
+                                    )
+                            }
                         }
                     }
                 }
+                .padding(4)
                 Spacer(minLength: 0)
             }
-            .padding(4)
-            .frame(width: itemAreaWidth, height: rowH, alignment: .topLeading)
+            .frame(width: itemAreaWidth, height: rowH, alignment: .center)
             // ── 背景：単色 ＋ 模様を ZStack で重ねる ──
             .background {
                 ZStack {
