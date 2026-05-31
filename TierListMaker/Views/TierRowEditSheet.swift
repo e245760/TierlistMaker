@@ -17,6 +17,7 @@ struct TierRowEditSheet: View {
     @State private var editedTextColor: Color
     @State private var showPaywall = false
     @State private var showDeleteAlert = false
+    @FocusState private var isNameFocused: Bool
 
     let vm: TierListViewModel
 
@@ -88,6 +89,7 @@ struct TierRowEditSheet: View {
                         TextField("S, A, B ...", text: $editedName)
                             .autocorrectionDisabled(true)
                             .textInputAutocapitalization(.never)
+                            .focused($isNameFocused)
                             .onChange(of: editedName) { _, newValue in
                                 if newValue.count > TierRow.maxLabelLength {
                                     editedName = String(newValue.prefix(TierRow.maxLabelLength))
@@ -190,6 +192,11 @@ struct TierRowEditSheet: View {
             }
             .navigationTitle("ラベルを編集")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    isNameFocused = true
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }

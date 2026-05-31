@@ -9,6 +9,7 @@ struct AddItemSheet: View {
     @State private var showPhotoPicker = false
     @State private var showAddedFeedback = false
     @State private var showDismissAlert = false
+    @FocusState private var isLabelFocused: Bool
 
     private var hasUnadded: Bool {
         !labelText.isEmpty
@@ -34,6 +35,7 @@ struct AddItemSheet: View {
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 14)
                                     .background(Color(.systemBackground))
+                                    .focused($isLabelFocused)
 
                                 Divider()
                                     .padding(.leading, 16)
@@ -140,6 +142,12 @@ struct AddItemSheet: View {
             }
             .navigationTitle("アイテム追加")
             .navigationBarTitleDisplayMode(.large)
+            .onAppear {
+                // シートのアニメーション完了後にキーボードを表示する
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    isLabelFocused = true
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") {

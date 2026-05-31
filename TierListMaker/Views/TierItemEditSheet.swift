@@ -27,6 +27,7 @@ struct TextItemEditSheet: View {
     @State private var editedTextColor: Color
     @State private var editedBgColor: Color
     @State private var showPaywall = false          // ← Proバッジタップ時に表示
+    @FocusState private var isLabelFocused: Bool
 
     private let maxLength = 12
 
@@ -82,6 +83,7 @@ struct TextItemEditSheet: View {
                     Section("テキスト（最大\(maxLength)文字）") {
                         TextField("アイテム名", text: $editedLabel)
                             .autocorrectionDisabled(true)
+                            .focused($isLabelFocused)
                             .onChange(of: editedLabel) { _, newValue in
                                 if newValue.count > maxLength {
                                     editedLabel = String(newValue.prefix(maxLength))
@@ -100,6 +102,11 @@ struct TextItemEditSheet: View {
             }
             .navigationTitle("テキスト編集")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    isLabelFocused = true
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }
@@ -230,8 +237,16 @@ struct ImageItemEditSheet: View {
         self._editedCropOffsetY   = State(initialValue: item.wrappedValue.cropOffsetY)
         self._editedCropScale     = State(initialValue: item.wrappedValue.cropScale)
         self._editedLabel         = State(initialValue: item.wrappedValue.label)
-        self._editedTextColor     = State(initialValue: Color(hex: item.wrappedValue.textColorHex))
-        self._editedBgColor       = State(initialValue: Color(hex: item.wrappedValue.backgroundColorHex))
+        // ラベルが未設定（テキスト帯を初めて追加する）場合は
+        // カラーグリッドの左上（テキスト: 白 / 帯背景: 黒）をデフォルトにする。
+        // 既にテキストが設定されている場合は保存済みの色をそのまま使う。
+        let hasLabel = !item.wrappedValue.label.isEmpty
+        self._editedTextColor     = State(initialValue: hasLabel
+            ? Color(hex: item.wrappedValue.textColorHex)
+            : Color(hex: "#FFFFFF"))
+        self._editedBgColor       = State(initialValue: hasLabel
+            ? Color(hex: item.wrappedValue.backgroundColorHex)
+            : Color(hex: "#000000"))
 
         if let name = item.wrappedValue.imageFileName {
             cachedImage = ImageFileStore.shared.load(fileName: name)
