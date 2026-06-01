@@ -99,14 +99,11 @@ struct TextItemEditSheet: View {
                         customColorPicker(label: "カスタムカラー", selected: $editedTextColor)
                     }
                 }
+                .scrollDismissesKeyboard(.immediately)
             }
+            .hideKeyboardOnTap()
             .navigationTitle("テキスト編集")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    isLabelFocused = true
-                }
-            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }
@@ -298,6 +295,9 @@ struct ImageItemEditSheet: View {
                     .padding(.vertical, 16)
                 }
                 .frame(height: 130)
+                // プレビューエリアのタップでキーボードを閉じる（NavigationLinkへの干渉を避けるため
+                // Form全体ではなくここのみに限定する）
+                .hideKeyboardOnTap()
 
                 Form {
 
@@ -382,6 +382,7 @@ struct ImageItemEditSheet: View {
                         .padding(.vertical, 4)
                     }
                 }
+                .scrollDismissesKeyboard(.immediately)
             }
             .navigationTitle("画像編集")
             .navigationBarTitleDisplayMode(.inline)

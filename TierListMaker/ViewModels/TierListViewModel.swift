@@ -84,25 +84,32 @@ class TierListViewModel: ObservableObject {
     /// map で新配列をローカル構築してから一括代入することで、
     /// @Published 通知と COW コピーをそれぞれ1回に抑える。
     func applyItemSizeToAll(_ size: ItemSize) {
+        // サイズが実際に変わった場合のみクロップをリセットする。
+        // 変わっていない場合（シートを開いて閉じただけ）はクロップ設定を維持する。
+        let sizeChanged = size != defaultItemSize
         defaultItemSize = size
 
         pool = pool.map { item in
-            var i         = item
-            i.itemSize    = size
-            i.cropOffsetX = 0
-            i.cropOffsetY = 0
-            i.cropScale   = 1.0
+            var i      = item
+            i.itemSize = size
+            if sizeChanged {
+                i.cropOffsetX = 0
+                i.cropOffsetY = 0
+                i.cropScale   = 1.0
+            }
             return i
         }
 
         rows = rows.map { row in
             var r   = row
             r.items = row.items.map { item in
-                var i         = item
-                i.itemSize    = size
-                i.cropOffsetX = 0
-                i.cropOffsetY = 0
-                i.cropScale   = 1.0
+                var i      = item
+                i.itemSize = size
+                if sizeChanged {
+                    i.cropOffsetX = 0
+                    i.cropOffsetY = 0
+                    i.cropScale   = 1.0
+                }
                 return i
             }
             return r

@@ -171,7 +171,11 @@ struct ImageCropEditView: View {
                     .resizable()
                     .scaledToFill()
                     .scaleEffect(ls)
-                    .offset(x: lo.x * itemSize.width, y: lo.y * itemSize.height)
+                    // offsetX/Y は itemSize に対する比率で保存されているが、
+                    // エディタキャンバスは itemSize より大きいため fW/fH で掛け算する。
+                    // TierItemView 側では itemSize.width/height で掛け算するため
+                    // 保存値の意味は変わらず、表示だけキャンバスに合わせる。
+                    .offset(x: lo.x * fW, y: lo.y * fH)
             }
 
             CropGridOverlay(lineColor: gridColor)

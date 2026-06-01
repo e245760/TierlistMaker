@@ -189,14 +189,11 @@ struct TierRowEditSheet: View {
                         customColorRow(label: "カスタムカラー", selected: $editedTextColor)
                     }
                 }
+                .scrollDismissesKeyboard(.immediately)
             }
+            .hideKeyboardOnTap()
             .navigationTitle("ラベルを編集")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    isNameFocused = true
-                }
-            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }

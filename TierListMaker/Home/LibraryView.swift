@@ -3,35 +3,35 @@ import SwiftUI
 // MARK: - SortOrder
 
 enum LibrarySortOrder: String, CaseIterable {
-    case updatedDesc = "updatedDesc"   // 更新日時（新しい順）← デフォルト
-    case updatedAsc  = "updatedAsc"    // 更新日時（古い順）
-    case titleAsc    = "titleAsc"      // タイトル（あいうえお順）
-    case createdDesc = "createdDesc"   // 作成日時（新しい順）
+    case createdDesc    = "createdDesc"    // 作成日時（新しい順）← デフォルト
+    case createdAsc     = "createdAsc"     // 作成日時（古い順）
+    case titleAsc       = "titleAsc"       // タイトル（あいうえお順）
+    case itemCountDesc  = "itemCountDesc"  // アイテム数（多い順）
 
     var label: String {
         switch self {
-        case .updatedDesc: return "更新日時（新しい順）"
-        case .updatedAsc:  return "更新日時（古い順）"
-        case .titleAsc:    return "タイトル順"
-        case .createdDesc: return "作成日時（新しい順）"
+        case .createdDesc:   return "作成日時（新しい順）"
+        case .createdAsc:    return "作成日時（古い順）"
+        case .titleAsc:      return "タイトル順"
+        case .itemCountDesc: return "アイテム数（多い順）"
         }
     }
 
     var icon: String {
         switch self {
-        case .updatedDesc: return "arrow.down.circle"
-        case .updatedAsc:  return "arrow.up.circle"
-        case .titleAsc:    return "textformat.abc"
-        case .createdDesc: return "calendar.badge.clock"
+        case .createdDesc:   return "calendar.badge.clock"
+        case .createdAsc:    return "calendar"
+        case .titleAsc:      return "textformat.abc"
+        case .itemCountDesc: return "square.grid.2x2"
         }
     }
 
     func sorted(_ lists: [TierListSaveData]) -> [TierListSaveData] {
         switch self {
-        case .updatedDesc: return lists.sorted { $0.updatedAt > $1.updatedAt }
-        case .updatedAsc:  return lists.sorted { $0.updatedAt < $1.updatedAt }
-        case .titleAsc:    return lists.sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
-        case .createdDesc: return lists.sorted { $0.createdAt > $1.createdAt }
+        case .createdDesc:   return lists.sorted { $0.createdAt > $1.createdAt }
+        case .createdAsc:    return lists.sorted { $0.createdAt < $1.createdAt }
+        case .titleAsc:      return lists.sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
+        case .itemCountDesc: return lists.sorted { $0.totalItemCount > $1.totalItemCount }
         }
     }
 }
@@ -47,7 +47,7 @@ struct LibraryView: View {
     @State private var renameText: String = ""
     @State private var showRenameAlert = false
     @State private var showSortDialog = false
-    @AppStorage("librarySortOrder") private var sortOrder: LibrarySortOrder = .updatedDesc
+    @AppStorage("librarySortOrder") private var sortOrder: LibrarySortOrder = .createdDesc
 
     private let columns = [
         GridItem(.flexible(), spacing: 16),
@@ -322,14 +322,6 @@ struct TierListCard: View, Equatable {
                 }
                 .font(.caption)
                 .foregroundColor(.secondary)
-
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                        .font(.caption2)
-                    Text(relativeDate)
-                        .font(.caption)
-                }
-                .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -369,12 +361,5 @@ struct TierListCard: View, Equatable {
             }
         }
         .background(Color(.systemGray5))
-    }
-
-    private var relativeDate: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.locale = Locale(identifier: "ja_JP")
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: saveData.updatedAt, relativeTo: Date())
     }
 }

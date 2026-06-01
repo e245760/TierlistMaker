@@ -1,4 +1,28 @@
 import SwiftUI
+import UIKit
+
+// MARK: - Keyboard Dismiss
+
+extension UIApplication {
+    /// ファーストレスポンダーを解除してキーボードを閉じる。
+    func hideKeyboard() {
+        sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+extension View {
+    /// このビューのどこかをタップしたときにキーボードを閉じる。
+    /// 子ビューのタップを妨げないよう simultaneousGesture で実装する。
+    func hideKeyboardOnTap() -> some View {
+        self.simultaneousGesture(
+            TapGesture().onEnded {
+                UIApplication.shared.hideKeyboard()
+            }
+        )
+    }
+}
+
+// MARK: - Color
 
 extension Color {
     init(hex: String) {

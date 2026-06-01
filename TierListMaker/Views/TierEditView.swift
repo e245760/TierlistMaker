@@ -29,6 +29,7 @@ private struct TierRowListView: View {
     let rowFrames: [UUID: CGRect]
     let trayFrame: CGRect
     let showPool: Bool
+    let isDraggingFromPool: Bool
     let onRowFramesChanged: ([UUID: CGRect]) -> Void
 
     var body: some View {
@@ -61,9 +62,11 @@ private struct TierRowListView: View {
             }
             .environment(\.colorScheme, vm.tierTheme.colorScheme)
             .onPreferenceChange(RowFramePreferenceKey.self, perform: onRowFramesChanged)
-            // アイテム選択中はパネルが閉じていなくてもフルハイトに戻し、
-            // 全行をタップ可能にする
-            .frame(height: (showPool && dragSel.selectedItem == nil)
+            // タイトル編集中にスクロールしたらキーボードを閉じる
+            .scrollDismissesKeyboard(.immediately)
+            // アイテム選択中・プールからドラッグ中はパネルが閉じていなくてもフルハイトに戻し、
+            // 全行をタップ/ドロップ可能にする
+            .frame(height: (showPool && !isDraggingFromPool && dragSel.selectedItem == nil)
                    ? scrollGeo.size.height - 100
                    : scrollGeo.size.height)
             .mask(
@@ -200,6 +203,12 @@ struct TierEditView: View {
     @State private var rowFrames: [UUID: CGRect] = [:]
     @State private var trayFrame: CGRect = .zero
 
+    // MARK: - プールからのドラッグ
+    //
+    // ドラッグ中はプールパネルを opacity(0) で透明化し、
+    // ジェスチャーを継続させながらゴーストと行ハイライトを表示する。
+    @State private var isDraggingFromPool = false
+
     // MARK: - ライフサイクル
 
     @Environment(\.scenePhase) private var scenePhase
@@ -222,6 +231,7 @@ struct TierEditView: View {
                         rowFrames: rowFrames,
                         trayFrame: trayFrame,
                         showPool: showPool,
+                        isDraggingFromPool: isDraggingFromPool,
                         onRowFramesChanged: { rowFrames = $0 }
                     )
                     .zIndex(0)
@@ -310,8 +320,9 @@ struct TierEditView: View {
                     .zIndex(98)
 
                     // ── プールパネル背景ディム ──
+                    // ドラッグ中（isDraggingFromPool）はディムを消して行が見えるようにする
 
-                    if showPool && dragSel.selectedItem == nil {
+                    if showPool && dragSel.selectedItem == nil && !isDraggingFromPool {
                         Color.black.opacity(0.3)
                             .ignoresSafeArea()
                             .onTapGesture {
@@ -321,23 +332,31 @@ struct TierEditView: View {
                     }
 
                     // ── プールパネル ──
+                    // ドラッグ中は opacity(0) で透明化しジェスチャーを継続させる。
+                    // allowsHitTesting(false) で透明状態でも新しいタッチをブロックしない。
 
                     if showPool {
                         ItemPoolView(
                             vm: vm,
                             showPool: $showPool,
-                            dragSel: dragSel
+                            dragSel: dragSel,
+                            dragPos: dragPos,
+                            dragHover: dragHover,
+                            rowFrames: rowFrames,
+                            isDraggingFromPool: $isDraggingFromPool
                         )
                         .transition(.asymmetric(
                             insertion: .move(edge: .bottom),
                             removal: .opacity
                         ))
+                        .opacity(isDraggingFromPool ? 0 : 1)
                         .allowsHitTesting(dragSel.selectedItem == nil)
                         .zIndex(201)
                     }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .hideKeyboardOnTap()
             .toolbar {
                 TierEditToolbar(
                     title: $tierListTitle,

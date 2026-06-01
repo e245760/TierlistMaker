@@ -121,6 +121,8 @@ struct AddItemSheet: View {
                     .padding(.top, 24)
                     .padding(.bottom, 40)
                 }
+                // スクロールでキーボードを閉じる
+                .scrollDismissesKeyboard(.immediately)
 
                 // ── 追加フィードバック ──
                 if showAddedFeedback {
@@ -140,14 +142,9 @@ struct AddItemSheet: View {
                     )
                 }
             }
+            .hideKeyboardOnTap()
             .navigationTitle("アイテム追加")
             .navigationBarTitleDisplayMode(.large)
-            .onAppear {
-                // シートのアニメーション完了後にキーボードを表示する
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    isLabelFocused = true
-                }
-            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") {

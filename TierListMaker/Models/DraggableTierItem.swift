@@ -29,6 +29,10 @@ struct DraggableTierItem: View {
             .opacity(isDraggingThis || isSelectedItem ? 0.3 : 1.0)
             .scaleEffect(isDraggingThis ? 0.9 : 1.0)
             .animation(.spring(), value: isDraggingThis)
+            // clipShape（円形など）がヒットテスト領域に影響するため、
+            // 常にレイアウトフレームと一致する矩形に明示的に固定する。
+            // これにより隣接アイテムのジェスチャーへの干渉を防ぐ。
+            .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .global)
                     .onChanged { value in
@@ -63,14 +67,10 @@ struct DraggableTierItem: View {
                         if isDragging {
                             if trayFrame.contains(value.location) {
                                 withAnimation(.spring()) { vm.returnToPool(item) }
-                                // ↓ 追加
-                                UINotificationFeedbackGenerator().notificationOccurred(.success)
                             } else if let targetId = rowFrames.first(where: {
                                 $0.value.contains(value.location)
                             })?.key {
                                 withAnimation(.spring()) { vm.moveItem(item, toRowId: targetId) }
-                                // ↓ 追加
-                                UINotificationFeedbackGenerator().notificationOccurred(.success)
                             }
                             // ドロップ先がなかった場合（宙に離した）は何もしない — フィードバックなし
                             isDragging = false

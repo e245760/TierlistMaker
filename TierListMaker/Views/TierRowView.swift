@@ -75,7 +75,6 @@ private struct RowTapOverlay: View {
                     vm.moveItem(item, toRowId: rowId)
                     dragSel.selectedItem = nil
                 }
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
             .allowsHitTesting(isActive)
     }
